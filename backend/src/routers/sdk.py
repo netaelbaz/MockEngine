@@ -38,7 +38,6 @@ def get_sdk_config(
             url_pattern=db_rule.url_pattern,
             status_code=db_rule.status_code,
             delay_ms=db_rule.delay_ms,
-            mode=db_rule.mode,
             mock_data=mock_data,
             is_enabled=db_rule.is_enabled
         ))

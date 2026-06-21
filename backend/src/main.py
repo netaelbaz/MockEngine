@@ -1,11 +1,16 @@
 """Main FastAPI application for MockEngine backend."""
 
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load .env from the backend directory (parent of src directory)
+# This MUST be before any imports that rely on environment variables
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-
 from src.routers import api_keys, rules, sdk, analytics
-
-
 # Initialize FastAPI app
 app = FastAPI(
     title="MockEngine API",

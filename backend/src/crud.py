@@ -7,73 +7,114 @@ import json
 from datetime import datetime, timedelta
 
 from src import models, schemas
+# Import both encryption utilities
+from src.utils.encryption import encrypt, decrypt
 
 
 # ==================== API Key Operations ====================
 
-def create_api_key(db: Session, key_name: str, api_key: str) -> models.ApiKey:
-    """Create a new API key."""
+def create_api_key(db: Session, key_name: str, api_key: str) -> schemas.ApiKeyResponse:
+    """Create a new API key and return a decoupled schema with plaintext key."""
+    encrypted_key = encrypt(api_key)
     db_key = models.ApiKey(
         name=key_name,
-        api_key=api_key,
+        api_key=encrypted_key,
         is_active=True
     )
     db.add(db_key)
     db.commit()
     db.refresh(db_key)
-    return db_key
+
+    # Map to schema and explicitly pass the original plaintext key
+    response_data = schemas.ApiKeyResponse.from_orm(db_key)
+    response_data.api_key = api_key
+    return response_data
+
+
+def get_api_key_by_id(db: Session, key_id: str) -> Optional[schemas.ApiKeyResponse]:
+    """Get an API key by ID and return it as a decrypted schema."""
+    db_key = db.query(models.ApiKey).filter(models.ApiKey.id == key_id).first()
+    if not db_key:
+        return None
+
+    response_data = schemas.ApiKeyResponse.from_orm(db_key)
+    if response_data.api_key:
+        try:
+            response_data.api_key = decrypt(response_data.api_key)
+        except Exception:
+            pass
+    return response_data
+
+
+def get_all_api_keys(db: Session, skip: int = 0, limit: int = 100) -> List[schemas.ApiKeyResponse]:
+    """Get all API keys with pagination, safely converting them to decrypted schemas."""
+    db_keys = db.query(models.ApiKey).offset(skip).limit(limit).all()
+    decrypted_keys = []
+
+    for db_key in db_keys:
+        # Convert to Pydantic schema first (disconnects from SQLAlchemy track-changes)
+        key_schema = schemas.ApiKeyResponse.from_orm(db_key)
+
+        if key_schema.api_key:
+            try:
+                key_schema.api_key = decrypt(key_schema.api_key)
+            except Exception:
+                pass  # Leaves it as-is if decryption fails
+
+        decrypted_keys.append(key_schema)
+
+    return decrypted_keys
 
 
 def get_api_key_by_key(db: Session, api_key: str) -> Optional[models.ApiKey]:
-    """Get an API key by the key string."""
-    return db.query(models.ApiKey).filter(
-        and_(
-            models.ApiKey.api_key == api_key,
-            models.ApiKey.is_active == True
-        )
-    ).first()
+    """
+    Get an API key by the plaintext key string.
 
-
-def get_api_key_by_id(db: Session, key_id: str) -> Optional[models.ApiKey]:
-    """Get an API key by ID."""
-    return db.query(models.ApiKey).filter(models.ApiKey.id == key_id).first()
+    Since Fernet uses non-deterministic encryption, we fetch active keys
+    and decrypt them to find a match.
+    """
+    active_keys = db.query(models.ApiKey).filter(models.ApiKey.is_active == True).all()
+    for db_key in active_keys:
+        try:
+            decrypted_val = decrypt(db_key.api_key)
+            if decrypted_val == api_key:
+                db_key.api_key = decrypted_val  # Set to plaintext for user response
+                return db_key
+        except Exception:
+            continue  # Skip keys that fail decryption or don't match
+    return None
 
 
 def validate_api_key(db: Session, api_key: str) -> Optional[models.ApiKey]:
     """
-    Validate an API key and return the key object if valid.
-
-    Hashes the incoming key before comparing with stored hashed keys.
+    Validate an incoming plaintext API key and return the key object if valid.
     """
-    from src.utils.api_key_generator import hash_api_key
-    hashed_key = hash_api_key(api_key)
-    return get_api_key_by_key(db, hashed_key)
-
-
-def get_all_api_keys(db: Session, skip: int = 0, limit: int = 100) -> List[models.ApiKey]:
-    """Get all API keys with pagination."""
-    return db.query(models.ApiKey).offset(skip).limit(limit).all()
+    return get_api_key_by_key(db, api_key)
 
 
 def update_api_key_active(db: Session, key_id: str, is_active: bool) -> Optional[models.ApiKey]:
     """Update the active status of an API key."""
-    db_key = get_api_key_by_id(db, key_id)
+    db_key = get_api_key_by_id(db, key_id)  # Already handles decryption internally
     if db_key:
         db_key.is_active = is_active
         db.commit()
         db.refresh(db_key)
+        # Re-decrypt after refreshing from the database
+        try:
+            db_key.api_key = decrypt(db_key.api_key)
+        except Exception:
+            pass
     return db_key
 
 
 def delete_api_key(db: Session, key_id: str) -> bool:
     """Delete an API key."""
-    db_key = get_api_key_by_id(db, key_id)
+    db_key = db.query(models.ApiKey).filter(models.ApiKey.id == key_id).first()
     if db_key:
         db.delete(db_key)
         db.commit()
         return True
     return False
-
 
 # ==================== Rule Operations ====================
 
@@ -84,7 +125,6 @@ def create_rule(db: Session, rule: schemas.RuleCreate, created_by_key_id: Option
         url_pattern=rule.url_pattern,
         status_code=rule.status_code,
         delay_ms=rule.delay_ms,
-        mode=rule.mode,
         mock_data=json.dumps(rule.mock_data),
         is_enabled=True,
         created_by_key_id=created_by_key_id

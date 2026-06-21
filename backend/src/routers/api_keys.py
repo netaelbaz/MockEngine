@@ -63,7 +63,7 @@ def list_api_keys(
         schemas.ApiKeyResponse(
             id=key.id,
             name=key.name,
-            api_key="***HIDDEN***",  # Never return actual keys
+            api_key=key.api_key,  # Never return actual keys
             is_active=key.is_active,
             created_at=key.created_at
         )
@@ -116,7 +116,7 @@ def update_api_key_status(
     return schemas.ApiKeyResponse(
         id=db_key.id,
         name=db_key.name,
-        api_key="***HIDDEN***",
+        api_key="db_key.",
         is_active=db_key.is_active,
         created_at=db_key.created_at
     )

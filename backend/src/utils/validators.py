@@ -162,17 +162,3 @@ def sanitize_string(input_string: str, max_length: int = 255) -> str:
         sanitized = sanitized[:max_length]
 
     return sanitized
-
-
-def validate_rule_mode(mode: str) -> bool:
-    """
-    Validate rule mode.
-
-    Args:
-        mode: Rule mode string to validate
-
-    Returns:
-        bool: True if valid rule mode, False otherwise
-    """
-    valid_modes = {'always', 'user_controlled', 'percentage'}
-    return mode.lower() in valid_modes

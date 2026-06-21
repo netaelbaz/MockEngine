@@ -35,7 +35,7 @@ class Rule(Base):
     url_pattern = Column(String, nullable=False, doc="URL regex or path pattern to match")
     status_code = Column(Integer, nullable=False, doc="HTTP response code to return")
     delay_ms = Column(Integer, default=0, nullable=False, doc="Response delay in milliseconds")
-    mode = Column(String, nullable=False, doc="Rule mode: 'always', 'user_controlled', or 'percentage'")
+    mode = Column(String, nullable=True, doc="Rule mode (deprecated - no longer used)")
     mock_data = Column(Text, nullable=False, doc="JSON string of mock response data")
     is_enabled = Column(Boolean, default=True, nullable=False, doc="Whether the rule is active")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, doc="Creation timestamp")

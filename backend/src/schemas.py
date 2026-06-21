@@ -32,20 +32,12 @@ class ApiKeyValidate(BaseModel):
 
 # ==================== Rule Schemas ====================
 
-class RuleMode(str, enum.Enum):
-    """Enumeration of rule modes."""
-    always = "always"
-    user_controlled = "user_controlled"
-    percentage = "percentage"
-
-
 class RuleCreate(BaseModel):
     """Schema for creating a new rule."""
     name: str = Field(..., min_length=1, max_length=200, description="User-friendly rule name")
     url_pattern: str = Field(..., min_length=1, description="URL regex or path pattern to match")
     status_code: int = Field(..., ge=100, le=599, description="HTTP response code")
     delay_ms: int = Field(0, ge=0, le=60000, description="Response delay in milliseconds")
-    mode: RuleMode = Field(..., description="Rule mode: always, user_controlled, or percentage")
     mock_data: Dict[str, Any] = Field(..., description="Mock response data as JSON object")
 
     @validator("mock_data")
@@ -62,7 +54,6 @@ class RuleUpdate(BaseModel):
     url_pattern: Optional[str] = Field(None, min_length=1)
     status_code: Optional[int] = Field(None, ge=100, le=599)
     delay_ms: Optional[int] = Field(None, ge=0, le=60000)
-    mode: Optional[RuleMode] = None
     mock_data: Optional[Dict[str, Any]] = None
     is_enabled: Optional[bool] = None
 
@@ -81,7 +72,6 @@ class RuleResponse(BaseModel):
     url_pattern: str
     status_code: int
     delay_ms: int
-    mode: str
     mock_data: Dict[str, Any]
     is_enabled: bool
     created_at: datetime
@@ -98,7 +88,6 @@ class RuleSDKResponse(BaseModel):
     url_pattern: str
     status_code: int
     delay_ms: int
-    mode: str
     mock_data: Dict[str, Any]
     is_enabled: bool
 

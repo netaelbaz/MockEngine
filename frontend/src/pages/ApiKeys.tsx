@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiKeysApi } from '../lib/api'
-import type { ApiKey, ApiKeyCreate } from '../types'
+import type { ApiKeyCreate } from '../types'
 
 export default function ApiKeys() {
   const queryClient = useQueryClient()
@@ -53,14 +53,12 @@ export default function ApiKeys() {
 
   return (
     <div>
-      <div className="flex justify-between items-center mb-7">
-        <div>
-          <div className="text-zinc-500 text-sm mb-1.5">API Keys</div>
-          <h1 className="text-3xl mb-2">API Key Management</h1>
-          <p className="text-zinc-600 text-base">
-            Generate and manage keys used by applications that integrate the SDK.
-          </p>
-        </div>
+      <div className="mb-7">
+        <div className="text-zinc-500 text-sm mb-1.5">API Keys</div>
+        <h1 className="text-3xl mb-2">API Key Management</h1>
+        <p className="text-zinc-600 text-base mb-4">
+          Generate and manage keys used by applications that integrate the SDK.
+        </p>
         <button
           onClick={() => setShowCreateForm(!showCreateForm)}
           className="px-5 py-3 rounded-xl bg-slate-900 text-white font-semibold"
@@ -93,7 +91,6 @@ export default function ApiKeys() {
               <th className="text-left py-4 px-4 text-sm text-zinc-600 font-medium">Name</th>
               <th className="text-left py-4 px-4 text-sm text-zinc-600 font-medium">Key Preview</th>
               <th className="text-left py-4 px-4 text-sm text-zinc-600 font-medium">Created</th>
-              <th className="text-left py-4 px-4 text-sm text-zinc-600 font-medium">Status</th>
               <th className="text-left py-4 px-4 text-sm text-zinc-600 font-medium">Actions</th>
             </tr>
           </thead>
@@ -103,47 +100,39 @@ export default function ApiKeys() {
                 <td className="py-4 px-4 font-medium">{key.name}</td>
                 <td className="py-4 px-4">
                   <code className="text-sm">
-                    {key.api_key === '***HIDDEN***'
-                      ? key.api_key
-                      : `${key.api_key.slice(0, 12)}...${key.api_key.slice(-6)}`}
+                    {`${key.api_key.slice(0, 12)}...${key.api_key.slice(-6)}`}
                   </code>
                 </td>
                 <td className="py-4 px-4 text-sm">
                   {new Date(key.created_at).toLocaleDateString()}
                 </td>
                 <td className="py-4 px-4">
-                  {key.is_active ? (
-                    <span className="text-green-600 font-semibold">Active</span>
-                  ) : (
-                    <span className="text-zinc-500">Disabled</span>
-                  )}
-                </td>
-                <td className="py-4 px-4">
                   <div className="flex gap-2">
-                    {key.api_key !== '***HIDDEN***' && (
+                    {(
                       <button
                         onClick={() => copyToClipboard(key.api_key, key.id.toString())}
-                        className="px-3 py-2 rounded-lg bg-indigo-100 text-indigo-700 font-medium text-sm"
+                        className="p-2 rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
+                        title={copiedKey === key.id.toString() ? 'Copied!' : 'Copy to clipboard'}
                       >
-                        {copiedKey === key.id.toString() ? 'Copied!' : 'Copy'}
+                        {copiedKey === key.id.toString() ? (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                        ) : (
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                          </svg>
+                        )}
                       </button>
                     )}
                     <button
-                      onClick={() =>
-                        toggleStatusMutation.mutate({
-                          keyId: key.id.toString(),
-                          isActive: key.is_active,
-                        })
-                      }
-                      className="px-3 py-2 rounded-lg bg-zinc-100 text-zinc-700 font-medium text-sm"
-                    >
-                      {key.is_active ? 'Disable' : 'Enable'}
-                    </button>
-                    <button
                       onClick={() => deleteMutation.mutate(key.id.toString())}
-                      className="px-3 py-2 rounded-lg bg-red-100 text-red-700 font-medium text-sm"
+                      className="p-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200"
+                      title="Delete"
                     >
-                      Delete
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                      </svg>
                     </button>
                   </div>
                 </td>
@@ -193,9 +182,6 @@ function CreateKeyForm({
           {isLoading ? 'Generating...' : 'Generate Key'}
         </button>
       </form>
-      <p className="text-sm text-zinc-500 mt-3">
-        ⚠️ Make sure to copy the API key immediately. It won't be shown again!
-      </p>
     </div>
   )
 }

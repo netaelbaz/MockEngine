@@ -14,15 +14,12 @@ export interface ApiKeyCreate {
 
 // ==================== Rule Types ====================
 
-export type RuleMode = 'always' | 'user_controlled' | 'percentage'
-
 export interface Rule {
   id: number
   name: string
   url_pattern: string
   status_code: number
   delay_ms: number
-  mode: RuleMode
   mock_data: Record<string, unknown>
   is_enabled: boolean
   created_at: string
@@ -35,7 +32,6 @@ export interface RuleCreate {
   url_pattern: string
   status_code: number
   delay_ms: number
-  mode: RuleMode
   mock_data: Record<string, unknown>
 }
 
@@ -44,7 +40,6 @@ export interface RuleUpdate {
   url_pattern?: string
   status_code?: number
   delay_ms?: number
-  mode?: RuleMode
   mock_data?: Record<string, unknown>
   is_enabled?: boolean
 }
