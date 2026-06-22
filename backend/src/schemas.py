@@ -139,8 +139,9 @@ class CallLogCreate(BaseModel):
     endpoint: str = Field(..., min_length=1, description="URL endpoint that was called")
     method: str = Field(..., min_length=1, description="HTTP method")
     wasIntercepted: bool = Field(default=False, description="Whether the call was intercepted")
-    interceptedByRuleId: Optional[str] = Field(None, description="Rule ID that intercepted the call")
+    interceptedByRuleId: Optional[int] = Field(None, description="Rule ID that intercepted the call")
     responseTimeMs: Optional[int] = Field(None, ge=0, description="Response time in milliseconds")
+    statusCode: Optional[int] = Field(None, description="HTTP response status code")
 
 
 class CallLogResponse(BaseModel):
@@ -161,7 +162,7 @@ class CallLogResponse(BaseModel):
 class InterceptionLogCreate(BaseModel):
     """Schema for creating an interception log."""
     deviceId: str = Field(..., description="Device identifier")
-    ruleId: str = Field(..., description="Rule ID that was applied")
+    ruleId: int = Field(..., description="Rule ID that was applied")
     endpoint: str = Field(..., min_length=1, description="Intercepted endpoint URL")
     requestData: Optional[Dict[str, Any]] = Field(None, description="Request details as JSON object")
     responseMockData: Dict[str, Any] = Field(..., description="Mock response data as JSON object")
@@ -260,6 +261,18 @@ class RecentInterception(BaseModel):
     device_id: str
 
 
+class ErrorDistributionItem(BaseModel):
+    """Schema for a single status code error count."""
+    status_code: int
+    count: int
+
+
+class LatencyByHourItem(BaseModel):
+    """Schema for average latency in a given hour."""
+    hour: str
+    avg_ms: float
+
+
 class AnalyticsOverviewResponse(BaseModel):
     """Schema for analytics overview response."""
     time_range: TimeRange
@@ -268,6 +281,8 @@ class AnalyticsOverviewResponse(BaseModel):
     endpoints: List[EndpointAnalytics]
     recent_interceptions: List[RecentInterception]
     app_versions: List[AppVersionStat]
+    error_distribution: List[ErrorDistributionItem]
+    latency_by_hour: List[LatencyByHourItem]
 
 
 class MostInterceptedEndpoint(BaseModel):

@@ -46,7 +46,7 @@ class Rule(Base):
     # Relationships
     created_by = relationship("ApiKey", back_populates="rules", foreign_keys=[created_by_key_id])
     call_logs = relationship("CallLog", back_populates="intercepted_by_rule")
-    interception_logs = relationship("InterceptionLog", back_populates="rule")
+    interception_logs = relationship("InterceptionLog", back_populates="rule", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Rule(id={self.id}, name={self.name}, url_pattern={self.url_pattern})>"
@@ -88,6 +88,7 @@ class CallLog(Base):
     intercepted_by_rule_id = Column(Integer, ForeignKey("rules.id"), nullable=True, doc="Rule that intercepted the call")
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, doc="Call timestamp")
     response_time_ms = Column(Integer, nullable=True, doc="Actual response time in milliseconds")
+    status_code = Column(Integer, nullable=True, doc="HTTP response status code")
 
     # Relationships
     device = relationship("Device", back_populates="call_logs")

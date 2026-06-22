@@ -133,6 +133,61 @@ object MockEngine : DefaultLifecycleObserver {
     }
 
     /**
+     * Log every API call (intercepted or not) for Endpoint Analytics
+     */
+    suspend fun logCall(
+        endpoint: String,
+        method: String,
+        wasIntercepted: Boolean,
+        interceptedByRuleId: Int? = null,
+        responseTimeMs: Int? = null,
+        statusCode: Int? = null
+    ) {
+        try {
+            val deviceId = cacheManager.getDeviceId() ?: return
+            val log = com.mockengine.sdk.data.models.CallLog(
+                deviceId = deviceId,
+                endpoint = endpoint,
+                method = method,
+                wasIntercepted = wasIntercepted,
+                interceptedByRuleId = interceptedByRuleId,
+                responseTimeMs = responseTimeMs,
+                statusCode = statusCode
+            )
+            apiService.logCall(log)
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log call", e)
+        }
+    }
+
+    /**
+     * Log an interception event to the backend for analytics
+     */
+    suspend fun logInterception(request: Request, rule: com.mockengine.sdk.data.models.Rule) {
+        try {
+            val deviceId = cacheManager.getDeviceId() ?: return
+            val log = com.mockengine.sdk.data.models.InterceptionLog(
+                deviceId = deviceId,
+                ruleId = rule.id,
+                endpoint = request.url.encodedPath,
+                requestData = mapOf(
+                    "method" to request.method,
+                    "url" to request.url.toString()
+                ),
+                responseMockData = rule.mockData ?: emptyMap()
+            )
+            val response = apiService.logInterception(log)
+            if (response.isSuccessful) {
+                Log.d(TAG, "Interception logged: ${log.endpoint} -> rule ${rule.id}")
+            } else {
+                Log.w(TAG, "Failed to log interception: HTTP ${response.code()}")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to log interception", e)
+        }
+    }
+
+    /**
      * Get matching rules for a specific HTTP request
      *
      * @param request HTTP request to match against rules
@@ -172,7 +227,8 @@ object MockEngine : DefaultLifecycleObserver {
         if (response.isSuccessful) {
             Log.d(TAG, "Device registered successfully")
         } else {
-            Log.w(TAG, "Device registration failed - HTTP ${response.code()}")
+            val errorBody = response.errorBody()?.string() ?: "no body"
+            Log.w(TAG, "Device registration failed - HTTP ${response.code()} - $errorBody")
         }
     }
 

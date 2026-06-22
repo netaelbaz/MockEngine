@@ -2,11 +2,13 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy import and_
 from typing import List, Optional
+from datetime import datetime
 import json
 
 from src.database import get_db
-from src import schemas, crud
+from src import schemas, crud, models
 from src.auth import get_api_key
 
 router = APIRouter(prefix="/api/sdk", tags=["SDK"])
@@ -14,7 +16,7 @@ router = APIRouter(prefix="/api/sdk", tags=["SDK"])
 
 @router.get("/config", response_model=List[schemas.RuleSDKResponse])
 def get_sdk_config(
-    api_key: str = Depends(get_api_key),
+    db_api_key: models.ApiKey = Depends(get_api_key),
     db: Session = Depends(get_db)
 ):
     """
@@ -26,10 +28,8 @@ def get_sdk_config(
 
     Requires X-API-KEY header for authentication.
     """
-    # Get all active rules
     rules = crud.get_active_rules(db)
 
-    # Convert to SDK response format (minimal fields)
     result = []
     for db_rule in rules:
         mock_data = json.loads(db_rule.mock_data) if db_rule.mock_data else {}
@@ -49,7 +49,7 @@ def get_sdk_config(
 @router.post("/register", response_model=schemas.DeviceResponse)
 def register_device(
     device: schemas.DeviceRegister,
-    api_key: str = Depends(get_api_key),
+    db_api_key: models.ApiKey = Depends(get_api_key),
     db: Session = Depends(get_db)
 ):
     """
@@ -60,31 +60,22 @@ def register_device(
 
     Requires X-API-KEY header for authentication.
     """
-    # Get API key to retrieve its ID
-    db_api_key = crud.get_api_key_by_key(db, api_key)
-    if not db_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key"
+    existing_device = db.query(models.Device).filter(
+        and_(
+            models.Device.device_id == device.deviceId,
+            models.Device.api_key_id == db_api_key.id
         )
-
-    # Check if device already exists
-    existing_device = crud.get_or_create_device(
-        db,
-        device_id=device.deviceId,
-        api_key_id=db_api_key.id
-    )
+    ).first()
 
     if existing_device:
-        # Update existing device info
         existing_device.app_version = device.appVersion
         existing_device.android_version = device.androidVersion
         existing_device.internet_mode = device.internetMode
+        existing_device.last_seen = datetime.utcnow()
         db.commit()
         db.refresh(existing_device)
         return existing_device
 
-    # Create new device
     db_device = crud.register_device(
         db,
         device_id=device.deviceId,
@@ -109,7 +100,7 @@ def register_device(
 @router.post("/log-intercept", response_model=schemas.SuccessResponse)
 def log_intercept(
     log_data: schemas.InterceptionLogCreate,
-    api_key: str = Depends(get_api_key),
+    db_api_key: models.ApiKey = Depends(get_api_key),
     db: Session = Depends(get_db)
 ):
     """
@@ -120,15 +111,6 @@ def log_intercept(
 
     Requires X-API-KEY header for authentication.
     """
-    # Get API key to find the device
-    db_api_key = crud.get_api_key_by_key(db, api_key)
-    if not db_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key"
-        )
-
-    # Find the device by device_id
     device = crud.get_device_by_device_id(db, log_data.deviceId)
     if not device:
         raise HTTPException(
@@ -136,7 +118,6 @@ def log_intercept(
             detail="Device not found. Please register the device first."
         )
 
-    # Create interception log
     crud.log_interception(
         db,
         device_id=device.id,
@@ -155,7 +136,7 @@ def log_intercept(
 @router.post("/log-call", response_model=schemas.SuccessResponse)
 def log_call(
     log_data: schemas.CallLogCreate,
-    api_key: str = Depends(get_api_key),
+    db_api_key: models.ApiKey = Depends(get_api_key),
     db: Session = Depends(get_db)
 ):
     """
@@ -166,15 +147,6 @@ def log_call(
 
     Requires X-API-KEY header for authentication.
     """
-    # Get API key to find the device
-    db_api_key = crud.get_api_key_by_key(db, api_key)
-    if not db_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key"
-        )
-
-    # Find the device by device_id
     device = crud.get_device_by_device_id(db, log_data.deviceId)
     if not device:
         raise HTTPException(
@@ -182,7 +154,6 @@ def log_call(
             detail="Device not found. Please register the device first."
         )
 
-    # Create call log
     crud.log_call(
         db,
         device_id=device.id,
@@ -190,7 +161,8 @@ def log_call(
         method=log_data.method,
         was_intercepted=log_data.wasIntercepted,
         intercepted_by_rule_id=log_data.interceptedByRuleId,
-        response_time_ms=log_data.responseTimeMs
+        response_time_ms=log_data.responseTimeMs,
+        status_code=log_data.statusCode
     )
 
     return schemas.SuccessResponse(
@@ -201,7 +173,7 @@ def log_call(
 
 @router.get("/devices", response_model=List[schemas.DeviceResponse])
 def list_devices(
-    api_key: str = Depends(get_api_key),
+    db_api_key: models.ApiKey = Depends(get_api_key),
     skip: int = 0,
     limit: int = 100,
     db: Session = Depends(get_db)
@@ -213,20 +185,8 @@ def list_devices(
 
     Requires X-API-KEY header for authentication.
     """
-    # Get API key
-    db_api_key = crud.get_api_key_by_key(db, api_key)
-    if not db_api_key:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Invalid API key"
-        )
-
-    # Get devices for this API key
-    from sqlalchemy import and_
-    devices = db.query(crud.models.Device).filter(
-        and_(
-            crud.models.Device.api_key_id == db_api_key.id
-        )
+    devices = db.query(models.Device).filter(
+        models.Device.api_key_id == db_api_key.id
     ).offset(skip).limit(limit).all()
 
     return [

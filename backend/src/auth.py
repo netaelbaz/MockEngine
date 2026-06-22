@@ -7,7 +7,7 @@ from typing import Optional
 
 from src.database import get_db
 from src.crud import validate_api_key
-from src.utils.api_key_generator import hash_api_key
+from src import models
 
 
 # API Key header scheme
@@ -17,16 +17,11 @@ api_key_header = APIKeyHeader(name="X-API-KEY", auto_error=False)
 async def get_api_key(
     api_key: Optional[str] = Security(api_key_header),
     db: Session = Depends(get_db)
-) -> str:
+) -> models.ApiKey:
     """
     Validate API key from X-API-KEY header.
 
-    Args:
-        api_key: API key from request header
-        db: Database session
-
-    Returns:
-        str: Validated API key string
+    Returns the ApiKey model object so callers don't need a second DB lookup.
 
     Raises:
         HTTPException: If API key is missing or invalid
@@ -38,7 +33,6 @@ async def get_api_key(
             headers={"WWW-Authenticate": "ApiKey"},
         )
 
-    # Validate the key against database
     validated_key = validate_api_key(db, api_key)
     if not validated_key:
         raise HTTPException(
@@ -47,7 +41,7 @@ async def get_api_key(
             headers={"WWW-Authenticate": "ApiKey"},
         )
 
-    return api_key
+    return validated_key
 
 
 async def get_api_key_optional(

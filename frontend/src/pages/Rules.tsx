@@ -3,6 +3,10 @@ import React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { rulesApi } from '../lib/api'
 import type { Rule, RuleCreate, RuleUpdate } from '../types'
+import { Pagination } from '../components/Pagination'
+import { MethodBadge } from '../components/MethodBadge'
+
+const PAGE_SIZE = 8
 
 export default function Rules() {
   const queryClient = useQueryClient()
@@ -10,6 +14,7 @@ export default function Rules() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [expandedRuleId, setExpandedRuleId] = useState<string | null>(null)
   const [editingRuleId, setEditingRuleId] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
 
   const { data: rules, isLoading } = useQuery({
     queryKey: ['rules'],
@@ -53,6 +58,8 @@ export default function Rules() {
     rule.name.toLowerCase().includes(search.toLowerCase()) ||
     rule.url_pattern.toLowerCase().includes(search.toLowerCase())
   ) || []
+
+  const paginatedRules = filteredRules.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const handleRowClick = (ruleId: string) => {
     if (expandedRuleId === ruleId) {
@@ -100,7 +107,7 @@ export default function Rules() {
             type="text"
             placeholder="Search rules by endpoint, name "
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(0) }}
             className="w-80 px-4 py-3 rounded-xl border border-zinc-300 text-sm"
           />
         </div>
@@ -118,7 +125,7 @@ export default function Rules() {
             </tr>
           </thead>
           <tbody>
-            {filteredRules.map((rule) => {
+            {paginatedRules.map((rule) => {
               const ruleId = rule.id.toString()
               const isExpanded = expandedRuleId === ruleId
               const isEditing = editingRuleId === ruleId
@@ -131,11 +138,13 @@ export default function Rules() {
                   >
                     <td className="py-4 px-4 font-medium">{rule.name}</td>
                     <td className="py-4 px-4">
-                      <span className="px-3 py-1 rounded-full border border-zinc-300 text-xs font-semibold">
-                        {rule.method || 'GET'}
+                      <MethodBadge method={rule.method || 'GET'} />
+                    </td>
+                    <td className="py-4 px-4">
+                      <span className="inline-block bg-blue-50 text-blue-900 text-sm font-mono px-3 py-1 rounded-full">
+                        {rule.url_pattern}
                       </span>
                     </td>
-                    <td className="py-4 px-4">{rule.url_pattern}</td>
                     <td className="py-4 px-4">{rule.status_code}</td>
                     <td className="py-4 px-4">{rule.delay_ms} ms</td>
                     <td className="py-4 px-4">
@@ -156,10 +165,10 @@ export default function Rules() {
                       </button>
                     </td>
                     <td className="py-4 px-4">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         <button
                           onClick={(e) => handleEditClick(e, ruleId)}
-                          className="p-2 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200"
+                          className="text-blue-500 hover:text-blue-700 transition-colors"
                           title="Edit"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -171,7 +180,7 @@ export default function Rules() {
                             e.stopPropagation()
                             deleteMutation.mutate(ruleId)
                           }}
-                          className="p-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200"
+                          className="text-red-500 hover:text-red-700 transition-colors"
                           title="Delete"
                         >
                           <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -203,6 +212,7 @@ export default function Rules() {
             })}
           </tbody>
         </table>
+        <Pagination total={filteredRules.length} pageSize={PAGE_SIZE} page={page} onPageChange={setPage} />
       </div>
     </div>
   )

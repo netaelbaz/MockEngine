@@ -1,6 +1,6 @@
 """Database connection and session management for MockEngine."""
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
@@ -18,6 +18,16 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Create Base class for models
 Base = declarative_base()
+
+
+def run_migrations(engine):
+    """Run lightweight column-level migrations for SQLite."""
+    with engine.connect() as conn:
+        result = conn.execute(text("PRAGMA table_info(call_logs)"))
+        columns = [row[1] for row in result]
+        if "status_code" not in columns:
+            conn.execute(text("ALTER TABLE call_logs ADD COLUMN status_code INTEGER"))
+            conn.commit()
 
 
 def get_db():

@@ -110,6 +110,16 @@ export interface RecentInterception {
   device_id: string
 }
 
+export interface ErrorDistributionItem {
+  status_code: number
+  count: number
+}
+
+export interface LatencyByHourItem {
+  hour: string
+  avg_ms: number
+}
+
 export interface AnalyticsOverview {
   time_range: TimeRange
   devices: DeviceStats
@@ -117,6 +127,8 @@ export interface AnalyticsOverview {
   endpoints: EndpointAnalytics[]
   recent_interceptions: RecentInterception[]
   app_versions: AppVersionStat[]
+  error_distribution: ErrorDistributionItem[]
+  latency_by_hour: LatencyByHourItem[]
 }
 
 export interface MostInterceptedEndpoint {

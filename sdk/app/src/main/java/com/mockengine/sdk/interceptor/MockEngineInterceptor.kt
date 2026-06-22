@@ -4,7 +4,6 @@ import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.mockengine.sdk.MockEngine
-import com.mockengine.sdk.data.models.InterceptionLog
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -35,21 +34,33 @@ class MockEngineInterceptor(private val mockEngine: MockEngine) : Interceptor {
 
         if (matchingRules.isEmpty()) {
             Log.d(TAG, "No matching rules for ${request.url.encodedPath}")
-            return chain.proceed(request)
+            val start = System.currentTimeMillis()
+            val response = chain.proceed(request)
+            val responseTimeMs = (System.currentTimeMillis() - start).toInt()
+            GlobalScope.launch(Dispatchers.IO) {
+                mockEngine.logCall(
+                    endpoint = request.url.encodedPath,
+                    method = request.method,
+                    wasIntercepted = false,
+                    responseTimeMs = responseTimeMs,
+                    statusCode = response.code
+                )
+            }
+            return response
         }
 
         val rule = matchingRules.first()
         Log.d(TAG, "Applying rule ${rule.id} to ${request.url.encodedPath}")
 
+        val start = System.currentTimeMillis()
+        val response = buildMockResponse(chain, request, rule)
+        val responseTimeMs = (System.currentTimeMillis() - start).toInt()
+
         GlobalScope.launch(Dispatchers.IO) {
-            try {
-                logInterception(request, rule)
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to log interception", e)
-            }
+            mockEngine.logInterception(request, rule)
         }
 
-        return buildMockResponse(chain, request, rule)
+        return response
     }
 
     private fun buildMockResponse(
@@ -86,7 +97,13 @@ class MockEngineInterceptor(private val mockEngine: MockEngine) : Interceptor {
                 chain.proceed(request)
             } catch (e: IOException) {
                 Log.e(TAG, "Network request failed in ghost mode", e)
-                throw e
+                return Response.Builder()
+                    .request(request)
+                    .protocol(Protocol.HTTP_1_1)
+                    .code(503)
+                    .message("Ghost mode unavailable: real server unreachable")
+                    .body("{}".toResponseBody("application/json".toMediaType()))
+                    .build()
             }
             val responseBody = createGhostModeResponse(originalResponse)
             originalResponse.newBuilder()
@@ -132,33 +149,4 @@ class MockEngineInterceptor(private val mockEngine: MockEngine) : Interceptor {
         return createJsonResponseBody(mockedJson)
     }
 
-    /**
-     * Log interception event for analytics
-     */
-    private suspend fun logInterception(request: Request, rule: com.mockengine.sdk.data.models.Rule) {
-        try {
-            val requestData = mapOf(
-                "method" to request.method,
-                "url" to request.url.toString(),
-                "headers" to request.headers.toMap()
-            )
-
-            val responseMockData = rule.mockData ?: emptyMap()
-
-            val log = InterceptionLog(
-                ruleId = rule.id,
-                endpoint = request.url.encodedPath,
-                requestData = requestData,
-                responseMockData = responseMockData
-            )
-
-            // Call API to log interception
-            // Note: This is commented out as the actual API call would be through mockEngine.apiService
-            // mockEngine.apiService.logInterception(log)
-
-            Log.d(TAG, "Logged interception: ${log.endpoint} -> rule ${rule.id}")
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to create interception log", e)
-        }
-    }
 }

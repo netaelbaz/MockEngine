@@ -2,12 +2,16 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiKeysApi } from '../lib/api'
 import type { ApiKeyCreate } from '../types'
+import { Pagination } from '../components/Pagination'
+
+const PAGE_SIZE = 8
 
 export default function ApiKeys() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [copiedKey, setCopiedKey] = useState<string | null>(null)
+  const [page, setPage] = useState(0)
 
   const { data: apiKeys, isLoading } = useQuery({
     queryKey: ['api-keys'],
@@ -40,6 +44,8 @@ export default function ApiKeys() {
   const filteredKeys = apiKeys?.filter((key) =>
     key.name.toLowerCase().includes(search.toLowerCase())
   ) || []
+
+  const paginatedKeys = filteredKeys.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
 
   const copyToClipboard = async (key: string, keyId: string) => {
     await navigator.clipboard.writeText(key)
@@ -80,7 +86,7 @@ export default function ApiKeys() {
             type="text"
             placeholder="Search API keys by name"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(0) }}
             className="w-80 px-4 py-3 rounded-xl border border-zinc-300 text-sm"
           />
         </div>
@@ -95,39 +101,37 @@ export default function ApiKeys() {
             </tr>
           </thead>
           <tbody>
-            {filteredKeys.map((key) => (
+            {paginatedKeys.map((key) => (
               <tr key={key.id} className="border-b border-zinc-200 hover:bg-neutral-50">
                 <td className="py-4 px-4 font-medium">{key.name}</td>
                 <td className="py-4 px-4">
-                  <code className="text-sm">
+                  <span className="inline-block bg-blue-50 text-blue-900 text-sm font-mono px-3 py-1 rounded-full">
                     {`${key.api_key.slice(0, 12)}...${key.api_key.slice(-6)}`}
-                  </code>
+                  </span>
                 </td>
                 <td className="py-4 px-4 text-sm">
                   {new Date(key.created_at).toLocaleDateString()}
                 </td>
                 <td className="py-4 px-4">
-                  <div className="flex gap-2">
-                    {(
-                      <button
-                        onClick={() => copyToClipboard(key.api_key, key.id.toString())}
-                        className="p-2 rounded-lg bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
-                        title={copiedKey === key.id.toString() ? 'Copied!' : 'Copy to clipboard'}
-                      >
-                        {copiedKey === key.id.toString() ? (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                          </svg>
-                        ) : (
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                        )}
-                      </button>
-                    )}
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => copyToClipboard(key.api_key, key.id.toString())}
+                      className="text-blue-500 hover:text-blue-700 transition-colors"
+                      title={copiedKey === key.id.toString() ? 'Copied!' : 'Copy to clipboard'}
+                    >
+                      {copiedKey === key.id.toString() ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      ) : (
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      )}
+                    </button>
                     <button
                       onClick={() => deleteMutation.mutate(key.id.toString())}
-                      className="p-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200"
+                      className="text-red-500 hover:text-red-700 transition-colors"
                       title="Delete"
                     >
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -140,6 +144,7 @@ export default function ApiKeys() {
             ))}
           </tbody>
         </table>
+        <Pagination total={filteredKeys.length} pageSize={PAGE_SIZE} page={page} onPageChange={setPage} />
       </div>
     </div>
   )

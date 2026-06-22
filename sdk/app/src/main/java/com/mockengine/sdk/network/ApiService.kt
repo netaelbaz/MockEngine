@@ -17,4 +17,7 @@ interface MockEngineApiService {
 
     @POST("/api/sdk/log-intercept")
     suspend fun logInterception(@Body log: InterceptionLog): Response<SuccessResponse>
+
+    @POST("/api/sdk/log-call")
+    suspend fun logCall(@Body log: CallLog): Response<SuccessResponse>
 }

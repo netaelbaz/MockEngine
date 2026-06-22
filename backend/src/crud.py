@@ -78,10 +78,9 @@ def get_api_key_by_key(db: Session, api_key: str) -> Optional[models.ApiKey]:
         try:
             decrypted_val = decrypt(db_key.api_key)
             if decrypted_val == api_key:
-                db_key.api_key = decrypted_val  # Set to plaintext for user response
                 return db_key
         except Exception:
-            continue  # Skip keys that fail decryption or don't match
+            continue
     return None
 
 
@@ -182,9 +181,15 @@ def delete_rule(db: Session, rule_id: str) -> bool:
 
 # ==================== Device Operations ====================
 
-def get_or_create_device(db: Session, device_id: str, api_key_id: str) -> models.Device:
+def get_or_create_device(
+    db: Session,
+    device_id: str,
+    api_key_id: str,
+    app_version: str = "unknown",
+    android_version: Optional[str] = None,
+    internet_mode: str = "wifi"
+) -> models.Device:
     """Get existing device or create a new one."""
-    # Try to find existing device
     device = db.query(models.Device).filter(
         and_(
             models.Device.device_id == device_id,
@@ -193,14 +198,22 @@ def get_or_create_device(db: Session, device_id: str, api_key_id: str) -> models
     ).first()
 
     if device:
-        # Update last_seen
         device.last_seen = datetime.utcnow()
         db.commit()
         db.refresh(device)
         return device
 
-    # Create new device
-    return device
+    db_device = models.Device(
+        device_id=device_id,
+        api_key_id=api_key_id,
+        app_version=app_version,
+        android_version=android_version,
+        internet_mode=internet_mode
+    )
+    db.add(db_device)
+    db.commit()
+    db.refresh(db_device)
+    return db_device
 
 
 def register_device(
@@ -258,8 +271,9 @@ def log_call(
     endpoint: str,
     method: str,
     was_intercepted: bool = False,
-    intercepted_by_rule_id: Optional[str] = None,
-    response_time_ms: Optional[int] = None
+    intercepted_by_rule_id: Optional[int] = None,
+    response_time_ms: Optional[int] = None,
+    status_code: Optional[int] = None
 ) -> models.CallLog:
     """Log an API call for analytics."""
     db_log = models.CallLog(
@@ -268,7 +282,8 @@ def log_call(
         method=method,
         was_intercepted=was_intercepted,
         intercepted_by_rule_id=intercepted_by_rule_id,
-        response_time_ms=response_time_ms
+        response_time_ms=response_time_ms,
+        status_code=status_code
     )
     db.add(db_log)
     db.commit()
@@ -485,6 +500,43 @@ def get_analytics_overview(db: Session, time_range: str = "today") -> Dict[str, 
             "is_latest": version == latest_version
         })
 
+    # Error distribution (4xx / 5xx only)
+    error_dist_query = db.query(
+        models.CallLog.status_code,
+        func.count(models.CallLog.id).label("count")
+    ).filter(
+        models.CallLog.timestamp >= cutoff_time,
+        models.CallLog.status_code >= 400
+    ).group_by(
+        models.CallLog.status_code
+    ).order_by(
+        models.CallLog.status_code
+    ).all()
+
+    error_distribution = [
+        {"status_code": row[0], "count": row[1]}
+        for row in error_dist_query
+        if row[0] is not None
+    ]
+
+    # Average latency by hour
+    from sqlalchemy import text as sa_text
+    latency_query = db.query(
+        func.strftime("%H", models.CallLog.timestamp).label("hour"),
+        func.avg(models.CallLog.response_time_ms).label("avg_ms")
+    ).filter(
+        models.CallLog.timestamp >= cutoff_time,
+        models.CallLog.response_time_ms.isnot(None)
+    ).group_by(
+        func.strftime("%H", models.CallLog.timestamp)
+    ).order_by("hour").all()
+
+    latency_by_hour = [
+        {"hour": row[0], "avg_ms": round(row[1], 1)}
+        for row in latency_query
+        if row[0] is not None and row[1] is not None
+    ]
+
     return {
         "time_range": time_range,
         "devices": {
@@ -501,7 +553,9 @@ def get_analytics_overview(db: Session, time_range: str = "today") -> Dict[str, 
         },
         "endpoints": endpoints,
         "recent_interceptions": recent_interceptions,
-        "app_versions": app_versions
+        "app_versions": app_versions,
+        "error_distribution": error_distribution,
+        "latency_by_hour": latency_by_hour
     }
 
 
