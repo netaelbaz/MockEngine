@@ -2,18 +2,19 @@ import { useState } from 'react'
 import React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { rulesApi } from '../lib/api'
-import type { RuleCreate } from '../types'
+import type { Rule, RuleCreate, RuleUpdate } from '../types'
 
 export default function Rules() {
   const queryClient = useQueryClient()
   const [search, setSearch] = useState('')
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [expandedRuleId, setExpandedRuleId] = useState<string | null>(null)
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null)
 
   const { data: rules, isLoading } = useQuery({
     queryKey: ['rules'],
     queryFn: () => rulesApi.list(),
-    refetchInterval: 180000, // 3 minutes
+    refetchInterval: 180000,
   })
 
   const createMutation = useMutation({
@@ -21,6 +22,15 @@ export default function Rules() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rules'] })
       setShowCreateForm(false)
+    },
+  })
+
+  const updateMutation = useMutation({
+    mutationFn: ({ ruleId, data }: { ruleId: string; data: RuleUpdate }) =>
+      rulesApi.update(ruleId, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['rules'] })
+      setEditingRuleId(null)
     },
   })
 
@@ -43,6 +53,22 @@ export default function Rules() {
     rule.name.toLowerCase().includes(search.toLowerCase()) ||
     rule.url_pattern.toLowerCase().includes(search.toLowerCase())
   ) || []
+
+  const handleRowClick = (ruleId: string) => {
+    if (expandedRuleId === ruleId) {
+      setExpandedRuleId(null)
+      setEditingRuleId(null)
+    } else {
+      setExpandedRuleId(ruleId)
+      setEditingRuleId(null)
+    }
+  }
+
+  const handleEditClick = (e: React.MouseEvent, ruleId: string) => {
+    e.stopPropagation()
+    setExpandedRuleId(ruleId)
+    setEditingRuleId(ruleId)
+  }
 
   if (isLoading) {
     return <div className="text-center py-12 text-zinc-500">Loading...</div>
@@ -92,69 +118,89 @@ export default function Rules() {
             </tr>
           </thead>
           <tbody>
-            {filteredRules.map((rule) => (
-              <React.Fragment key={rule.id}>
-                <tr
-                  className="border-b border-zinc-200 hover:bg-neutral-50 cursor-pointer"
-                  onClick={() => setExpandedRuleId(expandedRuleId === rule.id.toString() ? null : rule.id.toString())}
-                >
-                  <td className="py-4 px-4 font-medium">{rule.name}</td>
-                  <td className="py-4 px-4">
-                    <span className="px-3 py-1 rounded-full border border-zinc-300 text-xs font-semibold">
-                      {rule.url_pattern.split(' ')[0] || 'GET'}
-                    </span>
-                  </td>
-                  <td className="py-4 px-4">{rule.url_pattern}</td>
-                  <td className="py-4 px-4">{rule.status_code}</td>
-                  <td className="py-4 px-4">{rule.delay_ms} ms</td>
-                  <td className="py-4 px-4">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        toggleMutation.mutate({ ruleId: rule.id.toString(), isEnabled: rule.is_enabled })
-                      }}
-                      className={`w-11 h-6 rounded-full relative transition-colors ${
-                        rule.is_enabled ? 'bg-green-500' : 'bg-zinc-300'
-                      }`}
-                    >
-                      <span
-                        className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
-                          rule.is_enabled ? 'right-0.5' : 'left-0.5'
+            {filteredRules.map((rule) => {
+              const ruleId = rule.id.toString()
+              const isExpanded = expandedRuleId === ruleId
+              const isEditing = editingRuleId === ruleId
+
+              return (
+                <React.Fragment key={rule.id}>
+                  <tr
+                    className="border-b border-zinc-200 hover:bg-neutral-50 cursor-pointer"
+                    onClick={() => handleRowClick(ruleId)}
+                  >
+                    <td className="py-4 px-4 font-medium">{rule.name}</td>
+                    <td className="py-4 px-4">
+                      <span className="px-3 py-1 rounded-full border border-zinc-300 text-xs font-semibold">
+                        {rule.method || 'GET'}
+                      </span>
+                    </td>
+                    <td className="py-4 px-4">{rule.url_pattern}</td>
+                    <td className="py-4 px-4">{rule.status_code}</td>
+                    <td className="py-4 px-4">{rule.delay_ms} ms</td>
+                    <td className="py-4 px-4">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          toggleMutation.mutate({ ruleId, isEnabled: rule.is_enabled })
+                        }}
+                        className={`w-11 h-6 rounded-full relative transition-colors ${
+                          rule.is_enabled ? 'bg-green-500' : 'bg-zinc-300'
                         }`}
-                      />
-                    </button>
-                  </td>
-                  <td className="py-4 px-4">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        deleteMutation.mutate(rule.id.toString())
-                      }}
-                      className="p-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200"
-                      title="Delete"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-                  </td>
-                </tr>
-                {expandedRuleId === rule.id.toString() && (
-                  <tr className="bg-neutral-50">
-                    <td colSpan={7} className="px-4 py-6">
-                      <div className="space-y-4">
-                        <div>
-                          <h4 className="text-sm font-semibold text-zinc-700 mb-2">Mock Data</h4>
-                          <pre className="bg-zinc-800 text-zinc-100 p-4 rounded-lg text-sm overflow-x-auto">
-                            {JSON.stringify(rule.mock_data, null, 2)}
-                          </pre>
-                        </div>
+                      >
+                        <span
+                          className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-transform ${
+                            rule.is_enabled ? 'right-0.5' : 'left-0.5'
+                          }`}
+                        />
+                      </button>
+                    </td>
+                    <td className="py-4 px-4">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => handleEditClick(e, ruleId)}
+                          className="p-2 rounded-lg bg-blue-100 text-blue-700 hover:bg-blue-200"
+                          title="Edit"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            deleteMutation.mutate(ruleId)
+                          }}
+                          className="p-2 rounded-lg bg-red-100 text-red-700 hover:bg-red-200"
+                          title="Delete"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
                       </div>
                     </td>
                   </tr>
-                )}
-              </React.Fragment>
-            ))}
+
+                  {isExpanded && (
+                    <tr className="bg-neutral-50">
+                      <td colSpan={7} className="px-6 py-6">
+                        {isEditing ? (
+                          <EditRuleForm
+                            rule={rule}
+                            onSubmit={(data) => updateMutation.mutate({ ruleId, data })}
+                            onCancel={() => setEditingRuleId(null)}
+                            isSaving={updateMutation.isPending}
+                          />
+                        ) : (
+                          <ViewRuleDetail rule={rule} />
+                        )}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -162,10 +208,184 @@ export default function Rules() {
   )
 }
 
+// ── View (read-only) ──────────────────────────────────────────────────────────
+
+function ViewRuleDetail({ rule }: { rule: Rule }) {
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-4">
+        <Field label="Rule Name" value={rule.name} />
+        <Field label="Method" value={rule.method || 'GET'} />
+        <Field label="Status Code" value={String(rule.status_code)} />
+        <Field label="Delay (ms)" value={String(rule.delay_ms)} />
+        <Field label="Endpoint Pattern" value={rule.url_pattern} className="col-span-2" />
+      </div>
+      <div>
+        <p className="text-sm font-semibold text-zinc-600 mb-2">Mock Data (JSON)</p>
+        <pre className="bg-zinc-800 text-zinc-100 p-4 rounded-lg text-sm overflow-x-auto">
+          {JSON.stringify(rule.mock_data, null, 2)}
+        </pre>
+      </div>
+    </div>
+  )
+}
+
+function Field({ label, value, className = '' }: { label: string; value: string; className?: string }) {
+  return (
+    <div className={`flex flex-col gap-1 ${className}`}>
+      <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wide">{label}</span>
+      <span className="px-3 py-2.5 rounded-xl border border-zinc-200 bg-white text-sm text-zinc-800">{value}</span>
+    </div>
+  )
+}
+
+// ── Edit form ─────────────────────────────────────────────────────────────────
+
+function EditRuleForm({
+  rule,
+  onSubmit,
+  onCancel,
+  isSaving,
+}: {
+  rule: Rule
+  onSubmit: (data: RuleUpdate) => void
+  onCancel: () => void
+  isSaving: boolean
+}) {
+  const [formData, setFormData] = useState<RuleUpdate>({
+    name: rule.name,
+    url_pattern: rule.url_pattern,
+    method: rule.method,
+    status_code: rule.status_code,
+    delay_ms: rule.delay_ms,
+    mock_data: rule.mock_data,
+  })
+  const [mockDataJson, setMockDataJson] = useState(JSON.stringify(rule.mock_data, null, 2))
+  const [jsonError, setJsonError] = useState<string | null>(null)
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (jsonError) return
+    try {
+      const parsed = JSON.parse(mockDataJson)
+      onSubmit({ ...formData, mock_data: parsed })
+    } catch {
+      setJsonError('Invalid JSON format')
+    }
+  }
+
+  const handleJsonChange = (value: string) => {
+    setMockDataJson(value)
+    try {
+      JSON.parse(value)
+      setJsonError(null)
+    } catch {
+      setJsonError('Invalid JSON format')
+    }
+  }
+
+  return (
+    <div>
+      <h3 className="text-base font-semibold mb-4 text-zinc-800">Edit Rule</h3>
+      <form onSubmit={handleSubmit} className="grid grid-cols-3 gap-4">
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-zinc-600">Rule Name <span className="text-red-500">*</span></label>
+          <input
+            type="text"
+            required
+            value={formData.name ?? ''}
+            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            className="px-3 py-3 rounded-xl border border-zinc-300 text-sm bg-white"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-zinc-600">Method</label>
+          <select
+            value={formData.method ?? 'GET'}
+            onChange={(e) => setFormData({ ...formData, method: e.target.value })}
+            className="px-3 py-3 rounded-xl border border-zinc-300 text-sm bg-white"
+          >
+            {['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ANY'].map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-zinc-600">Status Code</label>
+          <input
+            type="number"
+            required
+            min="100"
+            max="599"
+            value={formData.status_code ?? 200}
+            onChange={(e) => setFormData({ ...formData, status_code: parseInt(e.target.value) })}
+            className="px-3 py-3 rounded-xl border border-zinc-300 text-sm bg-white"
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-zinc-600">Delay (ms)</label>
+          <input
+            type="number"
+            required
+            min="0"
+            value={formData.delay_ms ?? 0}
+            onChange={(e) => setFormData({ ...formData, delay_ms: parseInt(e.target.value) })}
+            className="px-3 py-3 rounded-xl border border-zinc-300 text-sm bg-white"
+          />
+        </div>
+
+        <div className="col-span-3 flex flex-col gap-2">
+          <label className="text-sm font-semibold text-zinc-600">Endpoint Pattern <span className="text-red-500">*</span></label>
+          <input
+            type="text"
+            required
+            value={formData.url_pattern ?? ''}
+            onChange={(e) => setFormData({ ...formData, url_pattern: e.target.value })}
+            className="px-3 py-3 rounded-xl border border-zinc-300 text-sm bg-white"
+          />
+        </div>
+
+        <div className="col-span-3 flex flex-col gap-2">
+          <label className="text-sm font-semibold text-zinc-600">Mock Data (JSON)</label>
+          <textarea
+            value={mockDataJson}
+            onChange={(e) => handleJsonChange(e.target.value)}
+            className="px-3 py-3 rounded-xl border border-zinc-300 text-sm font-mono min-h-[120px] bg-white"
+          />
+          {jsonError && <span className="text-red-600 text-sm">{jsonError}</span>}
+        </div>
+
+        <div className="col-span-3 flex items-center gap-3">
+          <button
+            type="submit"
+            disabled={!!jsonError || isSaving}
+            className="px-6 py-3 rounded-xl bg-slate-900 text-white font-semibold disabled:opacity-50"
+          >
+            {isSaving ? 'Saving…' : 'Save Changes'}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-6 py-3 rounded-xl border border-zinc-300 text-zinc-700 font-semibold hover:bg-zinc-50"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+// ── Create form ───────────────────────────────────────────────────────────────
+
 function CreateRuleForm({ onSubmit }: { onSubmit: (rule: RuleCreate) => void }) {
   const [formData, setFormData] = useState<RuleCreate>({
     name: '',
     url_pattern: '',
+    method: 'GET',
     status_code: 200,
     delay_ms: 0,
     mock_data: {},
@@ -178,7 +398,7 @@ function CreateRuleForm({ onSubmit }: { onSubmit: (rule: RuleCreate) => void }) 
     try {
       const parsed = JSON.parse(mockDataJson)
       onSubmit({ ...formData, mock_data: parsed })
-    } catch (err) {
+    } catch {
       setJsonError('Invalid JSON format')
     }
   }
@@ -189,7 +409,7 @@ function CreateRuleForm({ onSubmit }: { onSubmit: (rule: RuleCreate) => void }) 
       const parsed = JSON.parse(value)
       setFormData({ ...formData, mock_data: parsed })
       setJsonError(null)
-    } catch (err) {
+    } catch {
       setJsonError('Invalid JSON format')
     }
   }
@@ -207,6 +427,19 @@ function CreateRuleForm({ onSubmit }: { onSubmit: (rule: RuleCreate) => void }) 
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             className="px-3 py-3 rounded-xl border border-zinc-300 text-sm"
           />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <label className="text-sm font-semibold text-zinc-600">Method</label>
+          <select
+            value={formData.method}
+            onChange={(e) => setFormData({ ...formData, method: e.target.value })}
+            className="px-3 py-3 rounded-xl border border-zinc-300 text-sm bg-white"
+          >
+            {['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'ANY'].map((m) => (
+              <option key={m} value={m}>{m}</option>
+            ))}
+          </select>
         </div>
 
         <div className="flex flex-col gap-2">

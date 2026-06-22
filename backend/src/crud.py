@@ -123,6 +123,7 @@ def create_rule(db: Session, rule: schemas.RuleCreate, created_by_key_id: Option
     db_rule = models.Rule(
         name=rule.name,
         url_pattern=rule.url_pattern,
+        method=rule.method.upper(),
         status_code=rule.status_code,
         delay_ms=rule.delay_ms,
         mock_data=json.dumps(rule.mock_data),

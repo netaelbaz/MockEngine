@@ -33,6 +33,7 @@ class Rule(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False, doc="User-friendly rule name")
     url_pattern = Column(String, nullable=False, doc="URL regex or path pattern to match")
+    method = Column(String, nullable=True, default="GET", doc="HTTP method: GET, POST, PUT, DELETE, PATCH or ANY")
     status_code = Column(Integer, nullable=False, doc="HTTP response code to return")
     delay_ms = Column(Integer, default=0, nullable=False, doc="Response delay in milliseconds")
     mode = Column(String, nullable=True, doc="Rule mode (deprecated - no longer used)")

@@ -18,6 +18,7 @@ export interface Rule {
   id: number
   name: string
   url_pattern: string
+  method: string
   status_code: number
   delay_ms: number
   mock_data: Record<string, unknown>
@@ -30,6 +31,7 @@ export interface Rule {
 export interface RuleCreate {
   name: string
   url_pattern: string
+  method: string
   status_code: number
   delay_ms: number
   mock_data: Record<string, unknown>
@@ -38,6 +40,7 @@ export interface RuleCreate {
 export interface RuleUpdate {
   name?: string
   url_pattern?: string
+  method?: string
   status_code?: number
   delay_ms?: number
   mock_data?: Record<string, unknown>

@@ -1,0 +1,1 @@
+// Top-level build file — plugin resolution is handled by pluginManagement in settings.gradle.kts

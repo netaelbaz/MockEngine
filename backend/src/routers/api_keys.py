@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from src.database import get_db
 from src import schemas, crud
-from src.utils.api_key_generator import generate_api_key, hash_api_key
+from src.utils.api_key_generator import generate_api_key
 
 router = APIRouter(prefix="/api/v1/api-keys", tags=["API Keys"])
 
@@ -25,13 +25,12 @@ def create_api_key(
     """
     # Generate the API key
     plain_api_key = generate_api_key()
-    hashed_api_key = hash_api_key(plain_api_key)
 
-    # Create API key in database
+    # Create API key in database (crud.create_api_key encrypts it internally)
     db_key = crud.create_api_key(
         db=db,
         key_name=key_data.key_name,
-        api_key=hashed_api_key
+        api_key=plain_api_key
     )
 
     # Return response with the plain API key (only time it's shown)

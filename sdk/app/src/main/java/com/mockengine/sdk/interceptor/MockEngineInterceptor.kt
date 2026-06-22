@@ -1,0 +1,164 @@
+package com.mockengine.sdk.interceptor
+
+import android.util.Log
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
+import com.mockengine.sdk.MockEngine
+import com.mockengine.sdk.data.models.InterceptionLog
+import kotlinx.coroutines.GlobalScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import okhttp3.*
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
+import java.io.IOException
+
+class MockEngineInterceptor(private val mockEngine: MockEngine) : Interceptor {
+
+    private companion object {
+        private const val TAG = "MockEngineInterceptor"
+    }
+
+    override fun intercept(chain: Interceptor.Chain): Response {
+        val request = chain.request()
+
+        // Check rules BEFORE making the real request so we can skip the real call
+        // when mockData is provided (fixes delay accuracy and allows mocking 404 endpoints)
+        val matchingRules = try {
+            kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                mockEngine.getMatchingRules(request)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to get matching rules", e)
+            emptyList()
+        }
+
+        if (matchingRules.isEmpty()) {
+            Log.d(TAG, "No matching rules for ${request.url.encodedPath}")
+            return chain.proceed(request)
+        }
+
+        val rule = matchingRules.first()
+        Log.d(TAG, "Applying rule ${rule.id} to ${request.url.encodedPath}")
+
+        GlobalScope.launch(Dispatchers.IO) {
+            try {
+                logInterception(request, rule)
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to log interception", e)
+            }
+        }
+
+        return buildMockResponse(chain, request, rule)
+    }
+
+    private fun buildMockResponse(
+        chain: Interceptor.Chain,
+        request: Request,
+        rule: com.mockengine.sdk.data.models.Rule
+    ): Response {
+        // Apply delay before returning the response so it reflects the configured latency
+        if (rule.delayMs > 0) {
+            Log.d(TAG, "Applying ${rule.delayMs}ms delay")
+            try {
+                Thread.sleep(rule.delayMs.toLong())
+            } catch (e: InterruptedException) {
+                Log.e(TAG, "Delay interrupted", e)
+            }
+        }
+
+        return if (rule.mockData != null && rule.mockData.isNotEmpty()) {
+            // User-provided mock data — skip the real network call entirely.
+            // This means the real endpoint's status code (e.g. 404) is irrelevant.
+            Log.d(TAG, "Using user-provided mock data")
+            val responseBody = createJsonResponseBody(rule.mockData)
+            Response.Builder()
+                .request(request)
+                .protocol(Protocol.HTTP_1_1)
+                .code(rule.statusCode)
+                .message("Mocked by MockEngine SDK")
+                .body(responseBody)
+                .build()
+        } else {
+            // Ghost mode — need the real response to clone, so make the actual call
+            Log.d(TAG, "Using ghost mode auto-generation")
+            val originalResponse = try {
+                chain.proceed(request)
+            } catch (e: IOException) {
+                Log.e(TAG, "Network request failed in ghost mode", e)
+                throw e
+            }
+            val responseBody = createGhostModeResponse(originalResponse)
+            originalResponse.newBuilder()
+                .code(rule.statusCode)
+                .message("Mocked by MockEngine SDK")
+                .body(responseBody)
+                .build()
+        }
+    }
+
+    /**
+     * Create JSON response body from data map
+     */
+    private fun createJsonResponseBody(data: Map<String, Any>): ResponseBody {
+        val json = Gson().toJson(data)
+        return json.toResponseBody("application/json".toMediaType())
+    }
+
+    /**
+     * Create Ghost Mode response - auto-generated mock data
+     * Clones original response with "MOCK_" prefix on string values
+     */
+    private fun createGhostModeResponse(originalResponse: Response): ResponseBody {
+        val originalBody = originalResponse.body
+        val originalJson = try {
+            val bodyString = originalBody?.string() ?: "{}"
+            Gson().fromJson(bodyString, object : TypeToken<Map<String, Any>>() {}.type) as? Map<String, Any> ?: emptyMap()
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to parse original response", e)
+            emptyMap()
+        }
+
+        // Clone with "MOCK_" prefix on string values
+        val mockedJson = originalJson.mapValues { (_, value) ->
+            when (value) {
+                is String -> "MOCK_$value"
+                is Number -> value
+                is Boolean -> value
+                else -> value
+            }
+        }
+
+        return createJsonResponseBody(mockedJson)
+    }
+
+    /**
+     * Log interception event for analytics
+     */
+    private suspend fun logInterception(request: Request, rule: com.mockengine.sdk.data.models.Rule) {
+        try {
+            val requestData = mapOf(
+                "method" to request.method,
+                "url" to request.url.toString(),
+                "headers" to request.headers.toMap()
+            )
+
+            val responseMockData = rule.mockData ?: emptyMap()
+
+            val log = InterceptionLog(
+                ruleId = rule.id,
+                endpoint = request.url.encodedPath,
+                requestData = requestData,
+                responseMockData = responseMockData
+            )
+
+            // Call API to log interception
+            // Note: This is commented out as the actual API call would be through mockEngine.apiService
+            // mockEngine.apiService.logInterception(log)
+
+            Log.d(TAG, "Logged interception: ${log.endpoint} -> rule ${rule.id}")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to create interception log", e)
+        }
+    }
+}

@@ -10,7 +10,7 @@ load_dotenv(dotenv_path=env_path)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.routers import api_keys, rules, sdk, analytics
+from src.routers import api_keys, rules, sdk, analytics, demo, demo
 # Initialize FastAPI app
 app = FastAPI(
     title="MockEngine API",
@@ -32,6 +32,7 @@ app.include_router(api_keys.router)
 app.include_router(rules.router)
 app.include_router(sdk.router)
 app.include_router(analytics.router)
+app.include_router(demo.router)
 
 
 @app.get("/", tags=["Root"])

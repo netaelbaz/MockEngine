@@ -36,6 +36,7 @@ def get_sdk_config(
         result.append(schemas.RuleSDKResponse(
             id=db_rule.id,
             url_pattern=db_rule.url_pattern,
+            method=db_rule.method or "GET",
             status_code=db_rule.status_code,
             delay_ms=db_rule.delay_ms,
             mock_data=mock_data,
