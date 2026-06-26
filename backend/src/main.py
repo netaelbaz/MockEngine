@@ -6,11 +6,12 @@ from dotenv import load_dotenv
 # Load .env from the backend directory (parent of src directory)
 # This MUST be before any imports that rely on environment variables
 env_path = Path(__file__).parent.parent / ".env"
-load_dotenv(dotenv_path=env_path)
+load_dotenv(dotenv_path=env_path, override=True)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from src.routers import api_keys, rules, sdk, analytics, demo
+from src.routers import ai as ai_router_module
 from src.database import engine, run_migrations
 
 run_migrations(engine)
@@ -36,6 +37,7 @@ app.include_router(rules.router)
 app.include_router(sdk.router)
 app.include_router(analytics.router)
 app.include_router(demo.router)
+app.include_router(ai_router_module.router)
 
 
 @app.get("/", tags=["Root"])

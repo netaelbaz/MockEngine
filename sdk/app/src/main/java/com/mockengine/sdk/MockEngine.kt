@@ -23,6 +23,7 @@ import java.util.*
 object MockEngine : DefaultLifecycleObserver {
 
     private const val TAG = "MockEngine"
+    private const val POLL_INTERVAL_MS = 60_000L
 
     private lateinit var context: Context
     private lateinit var apiKey: String
@@ -57,8 +58,8 @@ object MockEngine : DefaultLifecycleObserver {
             }
         }
 
-        // Start periodic config sync
-        startPeriodicSync()
+        // Fetch config and start polling
+        startPolling()
 
         // Hook into app lifecycle
         ProcessLifecycleOwner.get().lifecycle.addObserver(this)
@@ -68,50 +69,38 @@ object MockEngine : DefaultLifecycleObserver {
     }
 
     /**
-     * Called when app comes to foreground
+     * Called when app comes to foreground — start polling every minute
      */
     override fun onStart(owner: LifecycleOwner) {
         super.onStart(owner)
-        Log.d(TAG, "App came to foreground - starting sync")
-        startPeriodicSync()
+        Log.d(TAG, "App came to foreground - starting config poll")
+        startPolling()
     }
 
     /**
-     * Called when app goes to background
+     * Called when app goes to background — stop polling
      */
     override fun onStop(owner: LifecycleOwner) {
         super.onStop(owner)
-        Log.d(TAG, "App went to background - stopping sync")
-        stopPeriodicSync()
+        syncJob?.cancel()
     }
 
     /**
-     * Start periodic configuration sync with backend
+     * Trigger a one-shot config fetch (call this from pull-to-refresh)
      */
-    private fun startPeriodicSync() {
-        if (syncJob?.isActive == true) {
-            Log.d(TAG, "Sync already running")
-            return
-        }
+    fun syncNow() {
+        syncJob?.cancel()
+        startPolling()
+    }
 
+    private fun startPolling() {
+        syncJob?.cancel()
         syncJob = scope.launch {
-            Log.d(TAG, "Starting periodic config sync")
-            syncConfig() // Fetch rules immediately on startup
             while (isActive) {
-                delay(60 * 1000) // Then re-check every minute
-                if (cacheManager.shouldSync()) {
-                    syncConfig()
-                }
+                syncConfig()
+                delay(POLL_INTERVAL_MS)
             }
         }
-    }
-
-    /**
-     * Stop periodic configuration sync
-     */
-    private fun stopPeriodicSync() {
-        syncJob?.cancel()
-        Log.d(TAG, "Periodic sync stopped")
     }
 
     /**
@@ -274,7 +263,7 @@ object MockEngine : DefaultLifecycleObserver {
      */
     fun destroy() {
         Log.d(TAG, "Destroying MockEngine SDK")
-        stopPeriodicSync()
+        syncJob?.cancel()
         ProcessLifecycleOwner.get().lifecycle.removeObserver(this)
         scope.cancel()
     }

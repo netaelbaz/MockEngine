@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from src.main import app
 from src.database import Base, get_db
 from src import models, crud
-from src.utils.api_key_generator import generate_api_key, hash_api_key
+from src.utils.api_key_generator import generate_api_key
 
 
 # Test database URL (in-memory SQLite)
@@ -96,8 +96,7 @@ def sample_rule(db):
         name="Test Rule",
         url_pattern="/api/test",
         status_code=200,
-        delay_ms=0,
-        mode="always",
+        delay_s=0,
         mock_data={"message": "Test response"}
     )
 

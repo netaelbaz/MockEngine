@@ -16,8 +16,8 @@ data class Rule(
     val method: String = "GET",
     @SerializedName("status_code")
     val statusCode: Int,
-    @SerializedName("delay_ms")
-    val delayMs: Int,
+    @SerializedName("delay_s")
+    val delayS: Int,
     @SerializedName("mock_data")
     val mockData: Map<String, Any>?,
     @SerializedName("is_enabled")

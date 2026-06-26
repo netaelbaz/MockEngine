@@ -11,8 +11,7 @@ def test_create_rule(client: TestClient):
             "name": "User Profile Mock",
             "url_pattern": "/user/profile",
             "status_code": 200,
-            "delay_ms": 0,
-            "mode": "always",
+            "delay_s": 0,
             "mock_data": {"id": 1, "name": "Test User"}
         }
     )
@@ -22,8 +21,7 @@ def test_create_rule(client: TestClient):
     assert data["name"] == "User Profile Mock"
     assert data["url_pattern"] == "/user/profile"
     assert data["status_code"] == 200
-    assert data["delay_ms"] == 0
-    assert data["mode"] == "always"
+    assert data["delay_s"] == 0
     assert data["mock_data"]["id"] == 1
     assert data["is_enabled"] is True
 
@@ -36,8 +34,7 @@ def test_create_rule_invalid_url_pattern(client: TestClient):
             "name": "Invalid Rule",
             "url_pattern": "invalid",  # Doesn't start with /
             "status_code": 200,
-            "delay_ms": 0,
-            "mode": "always",
+            "delay_s": 0,
             "mock_data": {}
         }
     )

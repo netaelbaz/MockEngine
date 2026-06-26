@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import React from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { rulesApi } from '../lib/api'
+import { rulesApi, aiApi } from '../lib/api'
 import type { Rule, RuleCreate, RuleUpdate } from '../types'
 import { Pagination } from '../components/Pagination'
 import { MethodBadge } from '../components/MethodBadge'
@@ -146,7 +146,7 @@ export default function Rules() {
                       </span>
                     </td>
                     <td className="py-4 px-4">{rule.status_code}</td>
-                    <td className="py-4 px-4">{rule.delay_ms} ms</td>
+                    <td className="py-4 px-4">{rule.delay_s} s</td>
                     <td className="py-4 px-4">
                       <button
                         onClick={(e) => {
@@ -227,7 +227,7 @@ function ViewRuleDetail({ rule }: { rule: Rule }) {
         <Field label="Rule Name" value={rule.name} />
         <Field label="Method" value={rule.method || 'GET'} />
         <Field label="Status Code" value={String(rule.status_code)} />
-        <Field label="Delay (ms)" value={String(rule.delay_ms)} />
+        <Field label="Delay (s)" value={String(rule.delay_s)} />
         <Field label="Endpoint Pattern" value={rule.url_pattern} className="col-span-2" />
       </div>
       <div>
@@ -267,18 +267,22 @@ function EditRuleForm({
     url_pattern: rule.url_pattern,
     method: rule.method,
     status_code: rule.status_code,
-    delay_ms: rule.delay_ms,
+    delay_s: rule.delay_s,
     mock_data: rule.mock_data,
+    ai_prompt: rule.ai_prompt ?? undefined,
   })
   const [mockDataJson, setMockDataJson] = useState(JSON.stringify(rule.mock_data, null, 2))
   const [jsonError, setJsonError] = useState<string | null>(null)
+  const [aiPrompt, setAiPrompt] = useState(rule.ai_prompt ?? '')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     if (jsonError) return
     try {
       const parsed = JSON.parse(mockDataJson)
-      onSubmit({ ...formData, mock_data: parsed })
+      onSubmit({ ...formData, mock_data: parsed, ai_prompt: aiPrompt || undefined })
     } catch {
       setJsonError('Invalid JSON format')
     }
@@ -291,6 +295,22 @@ function EditRuleForm({
       setJsonError(null)
     } catch {
       setJsonError('Invalid JSON format')
+    }
+  }
+
+  const handleGenerate = async () => {
+    if (!aiPrompt.trim()) return
+    setIsGenerating(true)
+    setAiError(null)
+    try {
+      const result = await aiApi.generateMockData(aiPrompt, formData.url_pattern, formData.method)
+      const pretty = JSON.stringify(result.mock_data, null, 2)
+      setMockDataJson(pretty)
+      setJsonError(null)
+    } catch {
+      setAiError('Failed to generate data. Please try again.')
+    } finally {
+      setIsGenerating(false)
     }
   }
 
@@ -336,13 +356,13 @@ function EditRuleForm({
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-semibold text-zinc-600">Delay (ms)</label>
+          <label className="text-sm font-semibold text-zinc-600">Delay (s)</label>
           <input
             type="number"
             required
             min="0"
-            value={formData.delay_ms ?? 0}
-            onChange={(e) => setFormData({ ...formData, delay_ms: parseInt(e.target.value) })}
+            value={formData.delay_s ?? 0}
+            onChange={(e) => setFormData({ ...formData, delay_s: parseInt(e.target.value) })}
             className="px-3 py-3 rounded-xl border border-zinc-300 text-sm bg-white"
           />
         </div>
@@ -356,6 +376,33 @@ function EditRuleForm({
             onChange={(e) => setFormData({ ...formData, url_pattern: e.target.value })}
             className="px-3 py-3 rounded-xl border border-zinc-300 text-sm bg-white"
           />
+        </div>
+
+        <div className="col-span-3 rounded-xl border border-violet-200 bg-violet-50 p-4 flex flex-col gap-3">
+          <span className="text-sm font-semibold text-violet-700">Generate mock data with AI <span className="font-normal text-violet-500">(optional)</span></span>
+          <textarea
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            placeholder='e.g. "3 products with id, name, and price"'
+            className="px-3 py-2.5 rounded-xl border border-violet-200 text-sm bg-white min-h-[72px] resize-none"
+          />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isGenerating || !aiPrompt.trim()}
+              className="px-5 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold disabled:opacity-50 flex items-center gap-2"
+            >
+              {isGenerating && (
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              )}
+              {isGenerating ? 'Generating…' : 'Generate'}
+            </button>
+            {aiError && <span className="text-red-600 text-sm">{aiError}</span>}
+          </div>
         </div>
 
         <div className="col-span-3 flex flex-col gap-2">
@@ -397,17 +444,20 @@ function CreateRuleForm({ onSubmit }: { onSubmit: (rule: RuleCreate) => void }) 
     url_pattern: '',
     method: 'GET',
     status_code: 200,
-    delay_ms: 0,
+    delay_s: 0,
     mock_data: {},
   })
   const [mockDataJson, setMockDataJson] = useState('{\n  \n}')
   const [jsonError, setJsonError] = useState<string | null>(null)
+  const [aiPrompt, setAiPrompt] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
+  const [aiError, setAiError] = useState<string | null>(null)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
     try {
       const parsed = JSON.parse(mockDataJson)
-      onSubmit({ ...formData, mock_data: parsed })
+      onSubmit({ ...formData, mock_data: parsed, ai_prompt: aiPrompt || undefined })
     } catch {
       setJsonError('Invalid JSON format')
     }
@@ -421,6 +471,23 @@ function CreateRuleForm({ onSubmit }: { onSubmit: (rule: RuleCreate) => void }) 
       setJsonError(null)
     } catch {
       setJsonError('Invalid JSON format')
+    }
+  }
+
+  const handleGenerate = async () => {
+    if (!aiPrompt.trim()) return
+    setIsGenerating(true)
+    setAiError(null)
+    try {
+      const result = await aiApi.generateMockData(aiPrompt, formData.url_pattern, formData.method)
+      const pretty = JSON.stringify(result.mock_data, null, 2)
+      setMockDataJson(pretty)
+      setFormData((prev) => ({ ...prev, mock_data: result.mock_data }))
+      setJsonError(null)
+    } catch {
+      setAiError('Failed to generate data. Please try again.')
+    } finally {
+      setIsGenerating(false)
     }
   }
 
@@ -466,13 +533,13 @@ function CreateRuleForm({ onSubmit }: { onSubmit: (rule: RuleCreate) => void }) 
         </div>
 
         <div className="flex flex-col gap-2">
-          <label className="text-sm font-semibold text-zinc-600">Delay (ms)</label>
+          <label className="text-sm font-semibold text-zinc-600">Delay (s)</label>
           <input
             type="number"
             required
             min="0"
-            value={formData.delay_ms}
-            onChange={(e) => setFormData({ ...formData, delay_ms: parseInt(e.target.value) })}
+            value={formData.delay_s}
+            onChange={(e) => setFormData({ ...formData, delay_s: parseInt(e.target.value) })}
             className="px-3 py-3 rounded-xl border border-zinc-300 text-sm"
           />
         </div>
@@ -487,6 +554,33 @@ function CreateRuleForm({ onSubmit }: { onSubmit: (rule: RuleCreate) => void }) 
             onChange={(e) => setFormData({ ...formData, url_pattern: e.target.value })}
             className="px-3 py-3 rounded-xl border border-zinc-300 text-sm"
           />
+        </div>
+
+        <div className="col-span-3 rounded-xl border border-violet-200 bg-violet-50 p-4 flex flex-col gap-3">
+          <span className="text-sm font-semibold text-violet-700">Generate mock data with AI <span className="font-normal text-violet-500">(optional)</span></span>
+          <textarea
+            value={aiPrompt}
+            onChange={(e) => setAiPrompt(e.target.value)}
+            placeholder='e.g. "3 products with id, name, and price"'
+            className="px-3 py-2.5 rounded-xl border border-violet-200 text-sm bg-white min-h-[72px] resize-none"
+          />
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleGenerate}
+              disabled={isGenerating || !aiPrompt.trim()}
+              className="px-5 py-2 rounded-xl bg-violet-600 text-white text-sm font-semibold disabled:opacity-50 flex items-center gap-2"
+            >
+              {isGenerating && (
+                <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                </svg>
+              )}
+              {isGenerating ? 'Generating…' : 'Generate'}
+            </button>
+            {aiError && <span className="text-red-600 text-sm">{aiError}</span>}
+          </div>
         </div>
 
         <div className="col-span-3 flex flex-col gap-2">

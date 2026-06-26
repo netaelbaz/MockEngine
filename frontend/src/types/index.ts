@@ -20,8 +20,9 @@ export interface Rule {
   url_pattern: string
   method: string
   status_code: number
-  delay_ms: number
+  delay_s: number
   mock_data: Record<string, unknown>
+  ai_prompt?: string
   is_enabled: boolean
   created_at: string
   updated_at: string
@@ -33,8 +34,9 @@ export interface RuleCreate {
   url_pattern: string
   method: string
   status_code: number
-  delay_ms: number
+  delay_s: number
   mock_data: Record<string, unknown>
+  ai_prompt?: string
 }
 
 export interface RuleUpdate {
@@ -42,9 +44,20 @@ export interface RuleUpdate {
   url_pattern?: string
   method?: string
   status_code?: number
-  delay_ms?: number
+  delay_s?: number
   mock_data?: Record<string, unknown>
   is_enabled?: boolean
+  ai_prompt?: string
+}
+
+export interface AIGenerateRequest {
+  prompt: string
+  url_pattern?: string
+  method?: string
+}
+
+export interface AIGenerateResponse {
+  mock_data: Record<string, unknown>
 }
 
 // ==================== Device Types ====================

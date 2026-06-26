@@ -69,10 +69,10 @@ class MockEngineInterceptor(private val mockEngine: MockEngine) : Interceptor {
         rule: com.mockengine.sdk.data.models.Rule
     ): Response {
         // Apply delay before returning the response so it reflects the configured latency
-        if (rule.delayMs > 0) {
-            Log.d(TAG, "Applying ${rule.delayMs}ms delay")
+        if (rule.delayS > 0) {
+            Log.d(TAG, "Applying ${rule.delayS}s delay")
             try {
-                Thread.sleep(rule.delayMs.toLong())
+                Thread.sleep(rule.delayS * 1000L)
             } catch (e: InterruptedException) {
                 Log.e(TAG, "Delay interrupted", e)
             }

@@ -10,7 +10,7 @@ import com.mockengine.sdk.data.models.Rule
 /**
  * Room database for caching MockEngine rules locally
  */
-@Database(entities = [Rule::class], version = 3)
+@Database(entities = [Rule::class], version = 4)
 @TypeConverters(MapTypeConverter::class)
 abstract class CacheDatabase : RoomDatabase() {
 

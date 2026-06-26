@@ -124,8 +124,9 @@ def create_rule(db: Session, rule: schemas.RuleCreate, created_by_key_id: Option
         url_pattern=rule.url_pattern,
         method=rule.method.upper(),
         status_code=rule.status_code,
-        delay_ms=rule.delay_ms,
+        delay_s=rule.delay_s,
         mock_data=json.dumps(rule.mock_data),
+        ai_prompt=rule.ai_prompt,
         is_enabled=True,
         created_by_key_id=created_by_key_id
     )

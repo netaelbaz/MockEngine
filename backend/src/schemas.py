@@ -38,8 +38,9 @@ class RuleCreate(BaseModel):
     url_pattern: str = Field(..., min_length=1, description="URL regex or path pattern to match")
     method: str = Field("GET", description="HTTP method: GET, POST, PUT, DELETE, PATCH, or ANY")
     status_code: int = Field(..., ge=100, le=599, description="HTTP response code")
-    delay_ms: int = Field(0, ge=0, le=60000, description="Response delay in milliseconds")
+    delay_s: int = Field(0, ge=0, description="Response delay in seconds")
     mock_data: Dict[str, Any] = Field(..., description="Mock response data as JSON object")
+    ai_prompt: Optional[str] = Field(None, description="AI prompt used to generate mock_data")
 
     @validator("mock_data")
     def validate_mock_data_is_dict(cls, v):
@@ -55,9 +56,10 @@ class RuleUpdate(BaseModel):
     url_pattern: Optional[str] = Field(None, min_length=1)
     method: Optional[str] = None
     status_code: Optional[int] = Field(None, ge=100, le=599)
-    delay_ms: Optional[int] = Field(None, ge=0, le=60000)
+    delay_s: Optional[int] = Field(None, ge=0, le=60)
     mock_data: Optional[Dict[str, Any]] = None
     is_enabled: Optional[bool] = None
+    ai_prompt: Optional[str] = None
 
     @validator("mock_data")
     def validate_mock_data_is_dict(cls, v):
@@ -74,8 +76,9 @@ class RuleResponse(BaseModel):
     url_pattern: str
     method: str = "GET"
     status_code: int
-    delay_ms: int
+    delay_s: int
     mock_data: Dict[str, Any]
+    ai_prompt: Optional[str] = None
     is_enabled: bool
     created_at: datetime
     updated_at: datetime
@@ -91,7 +94,7 @@ class RuleSDKResponse(BaseModel):
     url_pattern: str
     method: str = "GET"
     status_code: int
-    delay_ms: int
+    delay_s: int
     mock_data: Dict[str, Any]
     is_enabled: bool
 
@@ -325,3 +328,17 @@ class DeviceAnalytics(BaseModel):
     devices_by_version: List[AppVersionStat]
     devices_by_android_version: List[AndroidVersionStat]
     recent_devices: List[DeviceResponse]  # Use existing DeviceResponse
+
+
+# ==================== AI Schemas ====================
+
+class AIGenerateRequest(BaseModel):
+    """Schema for AI mock data generation request."""
+    prompt: str = Field(..., min_length=1, description="Plain-English description of the data to generate")
+    url_pattern: Optional[str] = Field(None, description="Optional URL pattern context hint")
+    method: Optional[str] = Field(None, description="Optional HTTP method context hint")
+
+
+class AIGenerateResponse(BaseModel):
+    """Schema for AI mock data generation response."""
+    mock_data: Dict[str, Any]

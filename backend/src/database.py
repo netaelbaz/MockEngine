@@ -29,6 +29,12 @@ def run_migrations(engine):
             conn.execute(text("ALTER TABLE call_logs ADD COLUMN status_code INTEGER"))
             conn.commit()
 
+        result = conn.execute(text("PRAGMA table_info(rules)"))
+        rule_columns = [row[1] for row in result]
+        if "delay_ms" in rule_columns and "delay_s" not in rule_columns:
+            conn.execute(text("ALTER TABLE rules RENAME COLUMN delay_ms TO delay_s"))
+            conn.commit()
+
 
 def get_db():
     """
