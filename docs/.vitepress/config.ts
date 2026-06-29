@@ -9,6 +9,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Guide', link: '/introduction' },
+      { text: 'Demo', link: '/demo' },
       { text: 'Examples', link: '/examples' },
       { text: 'FAQ', link: '/faq' },
     ],
@@ -19,6 +20,7 @@ export default defineConfig({
         items: [
           { text: 'Introduction', link: '/introduction' },
           { text: 'Who Is It For?', link: '/who-is-it-for' },
+          { text: 'Demo', link: '/demo' },
         ],
       },
       {
