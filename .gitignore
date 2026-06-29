@@ -83,6 +83,10 @@ env/
 Thumbs.db
 desktop.ini
 
+# VitePress
+docs/.vitepress/cache
+docs/.vitepress/dist
+
 # Misc
 *.log
 *.bak
