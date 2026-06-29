@@ -132,12 +132,27 @@ function ErrorDistributionChart({ data }: { data: ErrorDistributionItem[] }) {
     color: errorColor(d.status_code),
   }))
 
+  const RADIAN = Math.PI / 180
+  const renderLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: {
+    cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number; percent: number; name: string
+  }) => {
+    if (percent < 0.05) return null
+    const radius = innerRadius + (outerRadius - innerRadius) * 0.5
+    const x = cx + radius * Math.cos(-midAngle * RADIAN)
+    const y = cy + radius * Math.sin(-midAngle * RADIAN)
+    return (
+      <text x={x} y={y} fill="white" textAnchor="middle" dominantBaseline="central" fontSize={13} fontWeight={600}>
+        {`${name} (${(percent * 100).toFixed(0)}%)`}
+      </text>
+    )
+  }
+
   return (
     <Card>
       <h2 className="text-xl font-semibold mb-4">Error Distribution</h2>
       <ResponsiveContainer width="100%" height={260}>
         <PieChart>
-          <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}>
+          <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} labelLine={false} label={renderLabel}>
             {chartData.map((entry, i) => (
               <Cell key={i} fill={entry.color} />
             ))}

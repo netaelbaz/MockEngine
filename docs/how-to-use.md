@@ -133,6 +133,17 @@ To test how your app handles a server outage or error:
 
 Your app will receive a 500 response immediately, letting you verify your error-handling UI, retry logic, and user-facing error messages.
 
+### Upload a JSON File
+
+If you already have a JSON response saved locally (e.g. from Postman, a Swagger export, or a previous test run), you can load it directly instead of typing or generating it:
+
+1. Open the rule form (create or edit)
+2. Click the **Upload JSON** button above the Mock Data field
+3. Select a `.json` file from your machine — the file's contents will be loaded into the Mock Data field
+4. Review and adjust the JSON if needed, then save the rule
+
+> The file must be valid JSON. If it isn't, an error will appear and the field will not be updated.
+
 ### AI-Powered Mock Generation
 
 If you need a realistic JSON payload but don't want to write it by hand:
