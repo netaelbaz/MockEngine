@@ -6,20 +6,46 @@ from typing import Optional, List, Dict, Any
 import json
 from datetime import datetime, timedelta
 
+from passlib.context import CryptContext
+
 from src import models, schemas
-# Import both encryption utilities
 from src.utils.encryption import encrypt, decrypt
+
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+# ==================== User Operations ====================
+
+def create_user(db: Session, email: str, password: str, first_name: str = "", last_name: str = "") -> models.User:
+    hashed = _pwd_context.hash(password)
+    user = models.User(email=email.lower().strip(), hashed_password=hashed, first_name=first_name.strip(), last_name=last_name.strip())
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def get_user_by_email(db: Session, email: str) -> Optional[models.User]:
+    return db.query(models.User).filter(models.User.email == email.lower().strip()).first()
+
+
+def authenticate_user(db: Session, email: str, password: str) -> Optional[models.User]:
+    user = get_user_by_email(db, email)
+    if not user or not _pwd_context.verify(password, user.hashed_password):
+        return None
+    return user
 
 
 # ==================== API Key Operations ====================
 
-def create_api_key(db: Session, key_name: str, api_key: str) -> schemas.ApiKeyResponse:
+def create_api_key(db: Session, key_name: str, api_key: str, user_id: Optional[int] = None) -> schemas.ApiKeyResponse:
     """Create a new API key and return a decoupled schema with plaintext key."""
     encrypted_key = encrypt(api_key)
     db_key = models.ApiKey(
         name=key_name,
         api_key=encrypted_key,
-        is_active=True
+        is_active=True,
+        user_id=user_id,
     )
     db.add(db_key)
     db.commit()
@@ -115,6 +141,47 @@ def delete_api_key(db: Session, key_id: str) -> bool:
         return True
     return False
 
+def get_api_keys_by_user(db: Session, user_id: int, skip: int = 0, limit: int = 100) -> List[schemas.ApiKeyResponse]:
+    """List API keys belonging to a specific user, with decrypted values."""
+    db_keys = db.query(models.ApiKey).filter(models.ApiKey.user_id == user_id).offset(skip).limit(limit).all()
+    result = []
+    for k in db_keys:
+        schema = schemas.ApiKeyResponse.from_orm(k)
+        try:
+            schema.api_key = decrypt(schema.api_key)
+        except Exception:
+            pass
+        result.append(schema)
+    return result
+
+
+def update_api_key_active_for_user(db: Session, key_id: str, user_id: int, is_active: bool) -> Optional[models.ApiKey]:
+    """Update active status of an API key, scoped to the owning user."""
+    db_key = db.query(models.ApiKey).filter(
+        models.ApiKey.id == key_id,
+        models.ApiKey.user_id == user_id,
+    ).first()
+    if not db_key:
+        return None
+    db_key.is_active = is_active
+    db.commit()
+    db.refresh(db_key)
+    return db_key
+
+
+def delete_api_key_for_user(db: Session, key_id: str, user_id: int) -> bool:
+    """Delete an API key, scoped to the owning user."""
+    db_key = db.query(models.ApiKey).filter(
+        models.ApiKey.id == key_id,
+        models.ApiKey.user_id == user_id,
+    ).first()
+    if not db_key:
+        return False
+    db.delete(db_key)
+    db.commit()
+    return True
+
+
 # ==================== Rule Operations ====================
 
 def create_rule(db: Session, rule: schemas.RuleCreate, created_by_key_id: Optional[str] = None) -> models.Rule:
@@ -126,6 +193,7 @@ def create_rule(db: Session, rule: schemas.RuleCreate, created_by_key_id: Option
         status_code=rule.status_code,
         delay_s=rule.delay_s,
         mock_data=json.dumps(rule.mock_data),
+        use_mock_backend=rule.use_mock_backend,
         ai_prompt=rule.ai_prompt,
         is_enabled=True,
         created_by_key_id=created_by_key_id
@@ -307,6 +375,7 @@ def log_interception(
     device_id: str,
     rule_id: str,
     endpoint: str,
+    method: str,
     request_data: Optional[Dict[str, Any]],
     response_mock_data: Dict[str, Any]
 ) -> models.InterceptionLog:
@@ -315,6 +384,7 @@ def log_interception(
         device_id=device_id,
         rule_id=rule_id,
         endpoint=endpoint,
+        method=method,
         request_data=json.dumps(request_data) if request_data else None,
         response_mock_data=json.dumps(response_mock_data)
     )
@@ -387,6 +457,30 @@ def get_analytics_overview(db: Session, time_range: str = "today") -> Dict[str, 
 
     internet_modes = {im[0]: im[1] for im in internet_modes_query}
 
+    # Device health
+    online_threshold = datetime.utcnow() - timedelta(minutes=30)
+
+    connected = db.query(func.count(models.Device.id)).filter(
+        models.Device.last_seen >= online_threshold
+    ).scalar()
+
+    last_heartbeat_row = db.query(func.max(models.Device.last_seen)).scalar()
+    last_heartbeat = last_heartbeat_row.isoformat() + "Z" if last_heartbeat_row else None
+
+    offline_today = db.query(func.count(models.Device.id)).filter(
+        models.Device.last_seen >= cutoff_time,
+        models.Device.last_seen < online_threshold
+    ).scalar()
+
+    avg_session_raw = db.query(
+        func.avg(
+            (func.julianday(models.Device.last_seen) - func.julianday(models.Device.first_seen)) * 24 * 60
+        )
+    ).filter(
+        models.Device.last_seen >= cutoff_time
+    ).scalar()
+    avg_session_minutes = round(float(avg_session_raw), 1) if avg_session_raw else None
+
     # Call stats
     total_calls = db.query(func.count(models.CallLog.id)).filter(
         models.CallLog.timestamp >= cutoff_time
@@ -398,12 +492,22 @@ def get_analytics_overview(db: Session, time_range: str = "today") -> Dict[str, 
         models.CallLog.timestamp >= cutoff_time
     ).distinct().count()
 
-    intercepted_count = db.query(func.count(models.CallLog.id)).filter(
-        models.CallLog.timestamp >= cutoff_time,
-        models.CallLog.was_intercepted == True
+    # Use InterceptionLog as source of truth for intercepted counts
+    intercepted_count = db.query(func.count(models.InterceptionLog.id)).filter(
+        models.InterceptionLog.timestamp >= cutoff_time
     ).scalar()
 
     interception_rate = intercepted_count / total_calls if total_calls > 0 else 0.0
+
+    # Pre-compute per-endpoint interception counts from InterceptionLog, keyed by (endpoint, method)
+    interception_per_endpoint = db.query(
+        models.InterceptionLog.endpoint,
+        models.InterceptionLog.method,
+        func.count(models.InterceptionLog.id).label('count')
+    ).filter(
+        models.InterceptionLog.timestamp >= cutoff_time
+    ).group_by(models.InterceptionLog.endpoint, models.InterceptionLog.method).all()
+    interception_endpoint_map = {(row[0], row[1]): row[2] for row in interception_per_endpoint}
 
     # Endpoint analytics
     endpoint_stats = db.query(
@@ -411,7 +515,6 @@ def get_analytics_overview(db: Session, time_range: str = "today") -> Dict[str, 
         models.CallLog.method,
         func.count(models.CallLog.id).label('call_count'),
         func.avg(models.CallLog.response_time_ms).label('avg_response_time'),
-        func.sum(case((models.CallLog.was_intercepted == True, 1), else_=0)).label('intercepted_count')
     ).filter(
         models.CallLog.timestamp >= cutoff_time
     ).group_by(
@@ -422,7 +525,7 @@ def get_analytics_overview(db: Session, time_range: str = "today") -> Dict[str, 
     # Get wifi/cellular breakdown per endpoint
     endpoints = []
     for ep in endpoint_stats:
-        endpoint, method, call_count, avg_response, intercepted_count = ep
+        endpoint, method, call_count, avg_response = ep
 
         # Query wifi/cellular for this endpoint
         wifi_query = db.query(func.count(models.CallLog.id)).join(
@@ -448,7 +551,7 @@ def get_analytics_overview(db: Session, time_range: str = "today") -> Dict[str, 
             "method": method,
             "call_count": call_count,
             "avg_response_time_ms": int(avg_response) if avg_response else None,
-            "was_intercepted_count": intercepted_count or 0,
+            "was_intercepted_count": interception_endpoint_map.get((endpoint, method), 0),
             "wifi_calls": wifi_query,
             "cellular_calls": cellular_query
         })
@@ -473,7 +576,7 @@ def get_analytics_overview(db: Session, time_range: str = "today") -> Dict[str, 
             "id": ri[0],
             "endpoint": ri[1],
             "rule_name": ri[2],
-            "timestamp": ri[3],
+            "timestamp": ri[3].isoformat() + "Z",
             "device_id": ri[4]
         }
         for ri in recent_interceptions_query
@@ -507,7 +610,8 @@ def get_analytics_overview(db: Session, time_range: str = "today") -> Dict[str, 
         func.count(models.CallLog.id).label("count")
     ).filter(
         models.CallLog.timestamp >= cutoff_time,
-        models.CallLog.status_code >= 400
+        models.CallLog.status_code >= 400,
+        models.CallLog.was_intercepted == False
     ).group_by(
         models.CallLog.status_code
     ).order_by(
@@ -538,8 +642,41 @@ def get_analytics_overview(db: Session, time_range: str = "today") -> Dict[str, 
         if row[0] is not None and row[1] is not None
     ]
 
+    # Traffic over time (total from CallLog, intercepted from InterceptionLog)
+    traffic_format = "%H" if time_range == "today" else "%Y-%m-%d"
+    traffic_query = db.query(
+        func.strftime(traffic_format, models.CallLog.timestamp).label("bucket"),
+        func.count(models.CallLog.id).label("total"),
+    ).filter(
+        models.CallLog.timestamp >= cutoff_time
+    ).group_by(
+        func.strftime(traffic_format, models.CallLog.timestamp)
+    ).order_by("bucket").all()
+
+    interception_bucket_query = db.query(
+        func.strftime(traffic_format, models.InterceptionLog.timestamp).label("bucket"),
+        func.count(models.InterceptionLog.id).label("intercepted")
+    ).filter(
+        models.InterceptionLog.timestamp >= cutoff_time
+    ).group_by(
+        func.strftime(traffic_format, models.InterceptionLog.timestamp)
+    ).all()
+    intercepted_by_bucket = {row[0]: row[1] for row in interception_bucket_query}
+
+    traffic_over_time = [
+        {"bucket": row[0], "total": row[1], "intercepted": intercepted_by_bucket.get(row[0], 0)}
+        for row in traffic_query
+        if row[0] is not None
+    ]
+
     return {
         "time_range": time_range,
+        "device_health": {
+            "connected": connected,
+            "last_heartbeat": last_heartbeat,
+            "offline_today": offline_today,
+            "avg_session_minutes": avg_session_minutes,
+        },
         "devices": {
             "total_connected": total_devices,
             "active_today": active_today,
@@ -556,7 +693,8 @@ def get_analytics_overview(db: Session, time_range: str = "today") -> Dict[str, 
         "recent_interceptions": recent_interceptions,
         "app_versions": app_versions,
         "error_distribution": error_distribution,
-        "latency_by_hour": latency_by_hour
+        "latency_by_hour": latency_by_hour,
+        "traffic_over_time": traffic_over_time
     }
 
 
@@ -613,7 +751,7 @@ def get_interception_analytics(db: Session, time_range: str = "today") -> Dict[s
             "id": il.id,
             "endpoint": il.endpoint,
             "rule_name": rule_name,
-            "timestamp": il.timestamp,
+            "timestamp": il.timestamp.isoformat() + "Z",
             "device_id": device_id,
             "response_mock_data": json.loads(il.response_mock_data) if il.response_mock_data else {}
         })
@@ -639,12 +777,65 @@ def get_interception_analytics(db: Session, time_range: str = "today") -> Dict[s
                 "usage_count": usage_count
             })
 
+    # Rule effectiveness: enabled rules only with hit count and last used timestamp
+    all_rules = db.query(models.Rule).filter(models.Rule.is_enabled == True).all()
+    rule_effectiveness = []
+    for rule in all_rules:
+        hits = db.query(func.count(models.InterceptionLog.id)).filter(
+            models.InterceptionLog.rule_id == rule.id,
+            models.InterceptionLog.timestamp >= cutoff_time
+        ).scalar() or 0
+
+        last_used_ts = db.query(func.max(models.InterceptionLog.timestamp)).filter(
+            models.InterceptionLog.rule_id == rule.id
+        ).scalar()
+
+        rule_effectiveness.append({
+            "rule_id": rule.id,
+            "rule_name": rule.name,
+            "endpoint": rule.url_pattern,
+            "hits": hits,
+            "last_used": last_used_ts.isoformat() + "Z" if last_used_ts else None
+        })
+
+    rule_effectiveness.sort(key=lambda x: x["hits"], reverse=True)
+
+    # Endpoint interception rate: total calls vs intercepted per endpoint+method
+    endpoint_rate_query = db.query(
+        models.CallLog.endpoint,
+        models.CallLog.method,
+        func.count(models.CallLog.id).label('total_calls'),
+        func.sum(case((models.CallLog.was_intercepted == True, 1), else_=0)).label('intercepted')
+    ).filter(
+        models.CallLog.timestamp >= cutoff_time
+    ).group_by(
+        models.CallLog.endpoint,
+        models.CallLog.method
+    ).all()
+
+    endpoint_interception_rate = []
+    for row in endpoint_rate_query:
+        endpoint, method, total_calls, intercepted = row
+        intercepted = int(intercepted or 0)
+        rate = round((intercepted / total_calls * 100), 1) if total_calls > 0 else 0.0
+        endpoint_interception_rate.append({
+            "endpoint": endpoint,
+            "method": method,
+            "total_calls": total_calls,
+            "intercepted": intercepted,
+            "rate": rate
+        })
+
+    endpoint_interception_rate.sort(key=lambda x: x["rate"], reverse=True)
+
     return {
         "time_range": time_range,
         "total_interceptions": total_interceptions,
         "most_intercepted_endpoints": most_intercepted_endpoints,
         "recent_interceptions": recent_interceptions,
-        "rule_usage": rule_usage
+        "rule_usage": rule_usage,
+        "rule_effectiveness": rule_effectiveness,
+        "endpoint_interception_rate": endpoint_interception_rate
     }
 
 

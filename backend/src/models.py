@@ -6,6 +6,21 @@ from sqlalchemy.sql import func
 from src.database import Base
 
 
+class User(Base):
+    """Users table for portal authentication."""
+
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    first_name = Column(String, nullable=False, default="")
+    last_name = Column(String, nullable=False, default="")
+    hashed_password = Column(String, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    api_keys = relationship("ApiKey", back_populates="user")
+
+
 class ApiKey(Base):
     """API Keys table for SDK authentication."""
 
@@ -16,8 +31,10 @@ class ApiKey(Base):
     api_key = Column(String, unique=True, nullable=False, index=True, doc="Hashed API key secret")
     is_active = Column(Boolean, default=True, nullable=False, doc="Whether the key is active")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, doc="Creation timestamp")
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
 
     # Relationships
+    user = relationship("User", back_populates="api_keys")
     rules = relationship("Rule", back_populates="created_by", foreign_keys="Rule.created_by_key_id")
     devices = relationship("Device", back_populates="api_key")
 
@@ -31,13 +48,14 @@ class Rule(Base):
     __tablename__ = "rules"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String, nullable=False, doc="User-friendly rule name")
+    name = Column(String, nullable=False, unique=True, doc="User-friendly rule name")
     url_pattern = Column(String, nullable=False, doc="URL regex or path pattern to match")
     method = Column(String, nullable=True, default="GET", doc="HTTP method: GET, POST, PUT, DELETE, PATCH or ANY")
-    status_code = Column(Integer, nullable=False, doc="HTTP response code to return")
+    status_code = Column(Integer, nullable=True, doc="HTTP response code to return, or None to pass through")
     delay_s = Column(Integer, default=0, nullable=False, doc="Response delay in seconds")
     mode = Column(String, nullable=True, doc="Rule mode (deprecated - no longer used)")
     mock_data = Column(Text, nullable=False, doc="JSON string of mock response data")
+    use_mock_backend = Column(Boolean, nullable=False, default=True, doc="When false, SDK hits real server and uses rule only for status/body overrides")
     ai_prompt = Column(Text, nullable=True, doc="AI prompt used to generate mock_data")
     is_enabled = Column(Boolean, default=True, nullable=False, doc="Whether the rule is active")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, doc="Creation timestamp")
@@ -108,6 +126,7 @@ class InterceptionLog(Base):
     device_id = Column(Integer, ForeignKey("devices.id"), nullable=False, index=True, doc="Device that triggered interception")
     rule_id = Column(Integer, ForeignKey("rules.id"), nullable=False, doc="Rule that was applied")
     endpoint = Column(String, nullable=False, doc="Intercepted endpoint URL")
+    method = Column(String, nullable=True, doc="HTTP method: GET, POST, etc.")
     request_data = Column(Text, nullable=True, doc="JSON string of request details")
     response_mock_data = Column(Text, nullable=False, doc="JSON string of mock response returned")
     timestamp = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, doc="Interception timestamp")

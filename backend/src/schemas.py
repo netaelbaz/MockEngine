@@ -6,6 +6,39 @@ from datetime import datetime
 import enum
 
 
+# ==================== User / Auth Schemas ====================
+
+class UserCreate(BaseModel):
+    email: str = Field(..., min_length=3, max_length=254)
+    password: str = Field(..., min_length=6, max_length=128)
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
+
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+
+class UserResponse(BaseModel):
+    id: int
+    email: str
+    first_name: str
+    last_name: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    first_name: str = ""
+    last_name: str = ""
+    email: str = ""
+
+
 # ==================== API Key Schemas ====================
 
 class ApiKeyCreate(BaseModel):
@@ -37,9 +70,10 @@ class RuleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="User-friendly rule name")
     url_pattern: str = Field(..., min_length=1, description="URL regex or path pattern to match")
     method: str = Field("GET", description="HTTP method: GET, POST, PUT, DELETE, PATCH, or ANY")
-    status_code: int = Field(..., ge=100, le=599, description="HTTP response code")
+    status_code: Optional[int] = Field(None, ge=100, le=599, description="HTTP response code (None = pass through real response code)")
     delay_s: int = Field(0, ge=0, description="Response delay in seconds")
     mock_data: Dict[str, Any] = Field(..., description="Mock response data as JSON object")
+    use_mock_backend: bool = Field(True, description="When false, SDK hits real server and uses rule only for status/body overrides")
     ai_prompt: Optional[str] = Field(None, description="AI prompt used to generate mock_data")
 
     @validator("mock_data")
@@ -58,6 +92,7 @@ class RuleUpdate(BaseModel):
     status_code: Optional[int] = Field(None, ge=100, le=599)
     delay_s: Optional[int] = Field(None, ge=0, le=60)
     mock_data: Optional[Dict[str, Any]] = None
+    use_mock_backend: Optional[bool] = None
     is_enabled: Optional[bool] = None
     ai_prompt: Optional[str] = None
 
@@ -75,9 +110,10 @@ class RuleResponse(BaseModel):
     name: str
     url_pattern: str
     method: str = "GET"
-    status_code: int
+    status_code: Optional[int] = None
     delay_s: int
     mock_data: Dict[str, Any]
+    use_mock_backend: bool = True
     ai_prompt: Optional[str] = None
     is_enabled: bool
     created_at: datetime
@@ -93,9 +129,10 @@ class RuleSDKResponse(BaseModel):
     id: int
     url_pattern: str
     method: str = "GET"
-    status_code: int
+    status_code: Optional[int] = None
     delay_s: int
     mock_data: Dict[str, Any]
+    use_mock_backend: bool = True
     is_enabled: bool
 
     class Config:
@@ -167,6 +204,7 @@ class InterceptionLogCreate(BaseModel):
     deviceId: str = Field(..., description="Device identifier")
     ruleId: int = Field(..., description="Rule ID that was applied")
     endpoint: str = Field(..., min_length=1, description="Intercepted endpoint URL")
+    method: str = Field(..., min_length=1, description="HTTP method: GET, POST, etc.")
     requestData: Optional[Dict[str, Any]] = Field(None, description="Request details as JSON object")
     responseMockData: Dict[str, Any] = Field(..., description="Mock response data as JSON object")
 
@@ -177,6 +215,7 @@ class InterceptionLogResponse(BaseModel):
     device_id: int
     rule_id: int
     endpoint: str
+    method: Optional[str]
     request_data: Optional[str]
     response_mock_data: str
     timestamp: datetime
@@ -260,7 +299,7 @@ class RecentInterception(BaseModel):
     id: int
     endpoint: str
     rule_name: str
-    timestamp: datetime
+    timestamp: str
     device_id: str
 
 
@@ -276,6 +315,21 @@ class LatencyByHourItem(BaseModel):
     avg_ms: float
 
 
+class TrafficOverTimeItem(BaseModel):
+    """Schema for total and intercepted requests in a time bucket."""
+    bucket: str
+    total: int
+    intercepted: int
+
+
+class DeviceHealth(BaseModel):
+    """Schema for device health metrics."""
+    connected: int
+    last_heartbeat: Optional[str] = None
+    offline_today: int
+    avg_session_minutes: Optional[float] = None
+
+
 class AnalyticsOverviewResponse(BaseModel):
     """Schema for analytics overview response."""
     time_range: TimeRange
@@ -286,6 +340,8 @@ class AnalyticsOverviewResponse(BaseModel):
     app_versions: List[AppVersionStat]
     error_distribution: List[ErrorDistributionItem]
     latency_by_hour: List[LatencyByHourItem]
+    traffic_over_time: List[TrafficOverTimeItem]
+    device_health: DeviceHealth
 
 
 class MostInterceptedEndpoint(BaseModel):
@@ -300,7 +356,7 @@ class RecentInterceptionDetail(BaseModel):
     id: int
     endpoint: str
     rule_name: str
-    timestamp: datetime
+    timestamp: str
     device_id: str
     response_mock_data: Dict[str, Any]
 
@@ -312,6 +368,24 @@ class RuleUsage(BaseModel):
     usage_count: int
 
 
+class RuleEffectiveness(BaseModel):
+    """Schema for rule effectiveness analytics."""
+    rule_id: int
+    rule_name: str
+    endpoint: str
+    hits: int
+    last_used: Optional[str] = None
+
+
+class EndpointInterceptionRate(BaseModel):
+    """Schema for endpoint interception rate analytics."""
+    endpoint: str
+    method: str
+    total_calls: int
+    intercepted: int
+    rate: float
+
+
 class InterceptionAnalyticsResponse(BaseModel):
     """Schema for interception analytics response."""
     time_range: TimeRange
@@ -319,6 +393,8 @@ class InterceptionAnalyticsResponse(BaseModel):
     most_intercepted_endpoints: List[MostInterceptedEndpoint]
     recent_interceptions: List[RecentInterceptionDetail]
     rule_usage: List[RuleUsage]
+    rule_effectiveness: List[RuleEffectiveness]
+    endpoint_interception_rate: List[EndpointInterceptionRate]
 
 
 class DeviceAnalytics(BaseModel):

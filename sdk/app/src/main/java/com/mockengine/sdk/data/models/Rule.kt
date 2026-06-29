@@ -15,11 +15,13 @@ data class Rule(
     val urlPattern: String,
     val method: String = "GET",
     @SerializedName("status_code")
-    val statusCode: Int,
+    val statusCode: Int?,
     @SerializedName("delay_s")
     val delayS: Int,
     @SerializedName("mock_data")
     val mockData: Map<String, Any>?,
+    @SerializedName("use_mock_backend")
+    val useMockBackend: Boolean = true,
     @SerializedName("is_enabled")
     val isEnabled: Boolean
 )

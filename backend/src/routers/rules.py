@@ -3,6 +3,7 @@
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from src.database import get_db
 from src import schemas, crud
@@ -30,7 +31,19 @@ def create_rule(
         )
 
     # Create rule in database
-    db_rule = crud.create_rule(db, rule)
+    try:
+        db_rule = crud.create_rule(db, rule)
+    except IntegrityError as e:
+        db.rollback()
+        if "unique" in str(e.orig).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A rule named '{rule.name}' already exists."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Database constraint error: {e.orig}"
+        )
 
     # Parse mock_data from JSON string for response
     import json
@@ -44,6 +57,8 @@ def create_rule(
         status_code=db_rule.status_code,
         delay_s=db_rule.delay_s,
         mock_data=mock_data,
+        use_mock_backend=db_rule.use_mock_backend,
+        ai_prompt=db_rule.ai_prompt,
         is_enabled=db_rule.is_enabled,
         created_at=db_rule.created_at,
         updated_at=db_rule.updated_at,
@@ -82,6 +97,8 @@ def list_rules(
             status_code=db_rule.status_code,
             delay_s=db_rule.delay_s,
             mock_data=mock_data,
+            use_mock_backend=db_rule.use_mock_backend,
+            ai_prompt=db_rule.ai_prompt,
             is_enabled=db_rule.is_enabled,
             created_at=db_rule.created_at,
             updated_at=db_rule.updated_at,
@@ -121,6 +138,8 @@ def get_rule(
         status_code=db_rule.status_code,
         delay_s=db_rule.delay_s,
         mock_data=mock_data,
+        use_mock_backend=db_rule.use_mock_backend,
+        ai_prompt=db_rule.ai_prompt,
         is_enabled=db_rule.is_enabled,
         created_at=db_rule.created_at,
         updated_at=db_rule.updated_at,
@@ -148,7 +167,19 @@ def update_rule(
         )
 
     # Update rule in database
-    db_rule = crud.update_rule(db, rule_id, rule_update)
+    try:
+        db_rule = crud.update_rule(db, rule_id, rule_update)
+    except IntegrityError as e:
+        db.rollback()
+        if "unique" in str(e.orig).lower():
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=f"A rule named '{rule_update.name}' already exists."
+            )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Database constraint error: {e.orig}"
+        )
 
     if not db_rule:
         raise HTTPException(
@@ -168,6 +199,8 @@ def update_rule(
         status_code=db_rule.status_code,
         delay_s=db_rule.delay_s,
         mock_data=mock_data,
+        use_mock_backend=db_rule.use_mock_backend,
+        ai_prompt=db_rule.ai_prompt,
         is_enabled=db_rule.is_enabled,
         created_at=db_rule.created_at,
         updated_at=db_rule.updated_at,

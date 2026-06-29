@@ -57,3 +57,7 @@ alembic/versions/*.pyc
 # OS
 .DS_Store
 Thumbs.db
+
+# Server logs
+*.err
+*.out

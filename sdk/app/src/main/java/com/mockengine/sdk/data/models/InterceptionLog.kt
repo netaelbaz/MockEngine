@@ -7,6 +7,7 @@ data class InterceptionLog(
     val deviceId: String,
     val ruleId: Int,
     val endpoint: String,
+    val method: String,
     val requestData: Map<String, Any>,
     val responseMockData: Map<String, Any>
 )

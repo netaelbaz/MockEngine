@@ -10,7 +10,7 @@ load_dotenv(dotenv_path=env_path, override=True)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from src.routers import api_keys, rules, sdk, analytics, demo
+from src.routers import api_keys, rules, sdk, analytics, demo, users as users_router_module
 from src.routers import ai as ai_router_module
 from src.database import engine, run_migrations
 
@@ -32,6 +32,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(users_router_module.router)
 app.include_router(api_keys.router)
 app.include_router(rules.router)
 app.include_router(sdk.router)

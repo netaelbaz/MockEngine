@@ -30,9 +30,46 @@ def run_migrations(engine):
             conn.commit()
 
         result = conn.execute(text("PRAGMA table_info(rules)"))
-        rule_columns = [row[1] for row in result]
+        rule_col_rows = list(result)
+        rule_columns = [row[1] for row in rule_col_rows]
         if "delay_ms" in rule_columns and "delay_s" not in rule_columns:
             conn.execute(text("ALTER TABLE rules RENAME COLUMN delay_ms TO delay_s"))
+            conn.commit()
+
+        result = conn.execute(text("PRAGMA table_info(interception_logs)"))
+        il_columns = [row[1] for row in result]
+        if "method" not in il_columns:
+            conn.execute(text("ALTER TABLE interception_logs ADD COLUMN method VARCHAR"))
+            conn.commit()
+
+        # Make rules.status_code nullable (SQLite requires full table recreation)
+        result = conn.execute(text("PRAGMA table_info(rules)"))
+        rules_notnull = {row[1]: row[3] for row in result}  # col_name -> notnull flag
+        if rules_notnull.get("status_code", 0) == 1:
+            existing_cols = list(rules_notnull.keys())
+            cols_csv = ", ".join(existing_cols)
+            conn.execute(text("ALTER TABLE rules RENAME TO rules_old"))
+            conn.execute(text("""
+                CREATE TABLE rules (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    name VARCHAR NOT NULL,
+                    url_pattern VARCHAR NOT NULL,
+                    method VARCHAR,
+                    status_code INTEGER,
+                    delay_s INTEGER NOT NULL DEFAULT 0,
+                    mode VARCHAR,
+                    mock_data TEXT NOT NULL,
+                    use_mock_backend BOOLEAN NOT NULL DEFAULT 1,
+                    ai_prompt TEXT,
+                    is_enabled BOOLEAN NOT NULL,
+                    created_at DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+                    updated_at DATETIME NOT NULL DEFAULT (CURRENT_TIMESTAMP),
+                    created_by_key_id INTEGER REFERENCES api_keys(id)
+                )
+            """))
+            conn.execute(text(f"INSERT INTO rules ({cols_csv}) SELECT {cols_csv} FROM rules_old"))
+            conn.execute(text("DROP TABLE rules_old"))
+            conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS uq_rules_name ON rules (name)"))
             conn.commit()
 
 

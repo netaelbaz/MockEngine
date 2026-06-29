@@ -60,7 +60,7 @@ export default function Dashboard() {
           onClick={() => setMode('general')}
           className={`px-6 py-3 rounded-xl text-base font-medium transition-colors ${
             mode === 'general'
-              ? 'bg-blue-600 text-white'
+              ? 'bg-indigo-600 text-white'
               : 'bg-white text-zinc-700 border border-zinc-300'
           }`}
         >
@@ -70,7 +70,7 @@ export default function Dashboard() {
           onClick={() => setMode('interception')}
           className={`px-6 py-3 rounded-xl text-base font-medium transition-colors ${
             mode === 'interception'
-              ? 'bg-blue-600 text-white'
+              ? 'bg-indigo-600 text-white'
               : 'bg-white text-zinc-700 border border-zinc-300'
           }`}
         >
@@ -233,7 +233,7 @@ const DASH_PAGE_SIZE = 3
 function DeviceHealthCard({ health }: { health: DeviceHealth }) {
   return (
     <Card>
-      <h2 className="text-base font-semibold mb-3">Device Health</h2>
+      <h2 className="text-base font-semibold mb-3">Device Connected</h2>
       <div className="grid grid-cols-2 gap-y-3 gap-x-6">
         <div>
           <div className="text-xs text-zinc-500 mb-0.5">Connected</div>
@@ -243,7 +243,7 @@ function DeviceHealthCard({ health }: { health: DeviceHealth }) {
           </div>
         </div>
         <div>
-          <div className="text-xs text-zinc-500 mb-0.5">Offline Today</div>
+          <div className="text-xs text-zinc-500 mb-0.5">Offline</div>
           <div className="flex items-center gap-1.5">
             {health.offline_today > 0 && (
               <span className="inline-block w-2 h-2 rounded-full bg-red-400 shrink-0" />
@@ -295,12 +295,16 @@ function GeneralMode({ overview }: { overview: AnalyticsOverview }) {
         <table className="w-full table-fixed">
           <thead>
             <tr className="border-b border-zinc-200">
-              <th className="text-left py-2 px-3 text-xs text-zinc-600 font-medium w-2/5">Endpoint</th>
-              <th className="text-left py-2 px-3 text-xs text-zinc-600 font-medium w-[10%]">Method</th>
-              <th className="text-right py-2 px-3 text-xs text-zinc-600 font-medium w-[10%]">Calls</th>
-              <th className="text-right py-2 px-3 text-xs text-zinc-600 font-medium w-[12%]">Avg Response</th>
-              <th className="text-right py-2 px-3 text-xs text-zinc-600 font-medium w-[12%]">Intercepted</th>
-              <th className="text-left py-2 px-3 text-xs text-zinc-600 font-medium">Network Type</th>
+              <th className="text-left py-2 px-3 text-sm text-zinc-600 font-medium w-2/5">Endpoint</th>
+              <th className="text-left py-2 px-3 text-sm text-zinc-600 font-medium w-[10%]">Method</th>
+              <th className="text-right py-2 px-3 text-sm text-zinc-600 font-medium w-[10%]">Calls</th>
+              <th className="text-right py-2 px-3 text-sm text-zinc-600 font-medium w-[12%]">Avg Response</th>
+              <th className="text-right py-2 px-3 text-sm text-zinc-600 font-medium w-[12%]">Intercepted</th>
+              <th className="text-left py-2 px-3 text-sm text-zinc-600 font-medium">
+                <span className="text-blue-500">Wi-Fi</span>
+                <span className="text-zinc-400"> / </span>
+                <span className="text-orange-400">Cellular</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -312,23 +316,28 @@ function GeneralMode({ overview }: { overview: AnalyticsOverview }) {
               const cellPct = 100 - wifiPct
               return (
                 <tr key={endpoint.endpoint + endpoint.method} className="border-b border-zinc-200 hover:bg-neutral-50">
-                  <td className="py-3 px-3 text-xs font-mono font-medium truncate">{endpoint.endpoint}</td>
+                  <td className="py-3 px-3 text-sm font-mono font-medium truncate">{endpoint.endpoint}</td>
                   <td className="py-3 px-3"><MethodBadge method={endpoint.method} /></td>
-                  <td className="py-3 px-3 text-xs text-right">{endpoint.call_count.toLocaleString()}</td>
-                  <td className="py-3 px-3 text-xs text-right">{endpoint.avg_response_time_ms ? `${endpoint.avg_response_time_ms} ms` : 'N/A'}</td>
-                  <td className="py-3 px-3 text-xs text-right">{endpoint.was_intercepted_count.toLocaleString()}</td>
+                  <td className="py-3 px-3 text-sm text-right">{endpoint.call_count.toLocaleString()}</td>
+                  <td className="py-3 px-3 text-sm text-right">{endpoint.avg_response_time_ms ? `${endpoint.avg_response_time_ms} ms` : 'N/A'}</td>
+                  <td className="py-3 px-3 text-sm text-right">{endpoint.was_intercepted_count.toLocaleString()}</td>
                   <td className="py-3 px-3">
                     {netTotal === 0 ? (
                       <span className="text-xs text-zinc-400">—</span>
                     ) : (
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden flex">
+                      <div
+                        className="flex flex-col gap-1"
+                        title={`Wi-Fi: ${wifiPct}% · Cellular: ${cellPct}%`}
+                      >
+                        <div className="h-2.5 bg-gray-100 rounded-full overflow-hidden flex">
                           <div className="h-full bg-blue-500" style={{ width: `${wifiPct}%` }} />
                           <div className="h-full bg-orange-400" style={{ width: `${cellPct}%` }} />
                         </div>
-                        <span className="text-xs text-zinc-500 shrink-0 w-24 text-right">
-                          W {wifiPct}% · C {cellPct}%
-                        </span>
+                        <div className="flex gap-1 text-xs font-medium">
+                          <span className="text-blue-500">{wifiPct}%</span>
+                          <span className="text-zinc-300">/</span>
+                          <span className="text-orange-400">{cellPct}%</span>
+                        </div>
                       </div>
                     )}
                   </td>
@@ -370,19 +379,19 @@ function RuleEffectivenessCard({ data }: { data: RuleEffectiveness[] }) {
       <table className="w-full table-fixed">
         <thead>
           <tr className="border-b border-zinc-200">
-            <th className="text-left py-2 px-2 text-xs text-zinc-600 font-medium w-1/2">Rule Name</th>
-            <th className="text-right py-2 px-2 text-xs text-zinc-600 font-medium w-1/6">Hits</th>
-            <th className="text-left py-2 px-2 text-xs text-zinc-600 font-medium">Last Used</th>
+            <th className="text-left py-2 px-2 text-sm text-zinc-600 font-medium w-1/2">Rule Name</th>
+            <th className="text-right py-2 px-2 text-sm text-zinc-600 font-medium w-1/6">Hits</th>
+            <th className="text-left py-2 px-2 text-sm text-zinc-600 font-medium">Last Used</th>
           </tr>
         </thead>
         <tbody>
           {data.length === 0 ? (
             <tr><td colSpan={3} className="py-8 text-center text-zinc-400">No rules configured yet.</td></tr>
-          ) : paginated.map((item) => (
-            <tr key={item.rule_id} className="border-b border-zinc-200 hover:bg-neutral-50">
-              <td className="py-2 px-2 font-medium text-xs truncate">{item.rule_name}</td>
-              <td className="py-2 px-2 text-xs text-right">{formatHits(item.hits)}</td>
-              <td className="py-2 px-2 text-xs text-zinc-500">{relativeTime(item.last_used)}</td>
+          ) : paginated.map((item, i) => (
+            <tr key={item.rule_id} className={`hover:bg-neutral-50 ${i < paginated.length - 1 ? 'border-b border-zinc-200' : ''}`}>
+              <td className="py-2 px-2 font-medium text-sm truncate">{item.rule_name}</td>
+              <td className="py-2 px-2 text-sm text-right">{formatHits(item.hits)}</td>
+              <td className="py-2 px-2 text-sm text-zinc-500">{relativeTime(item.last_used)}</td>
             </tr>
           ))}
         </tbody>
@@ -398,47 +407,49 @@ function EndpointInterceptionRateCard({ data }: { data: EndpointInterceptionRate
   return (
     <Card>
       <h2 className="text-lg font-semibold mb-3">Endpoint Interception Rate</h2>
-      <table className="w-full table-fixed">
-        <thead>
-          <tr className="border-b border-zinc-200">
-            <th className="text-left py-2 px-2 text-xs text-zinc-600 font-medium w-2/5">Endpoint</th>
-            <th className="text-left py-2 px-2 text-xs text-zinc-600 font-medium w-[10%]">Method</th>
-            <th className="text-right py-2 px-2 text-xs text-zinc-600 font-medium w-[13%]">Total Calls</th>
-            <th className="text-right py-2 px-2 text-xs text-zinc-600 font-medium w-[13%]">Intercepted</th>
-            <th className="text-left py-2 px-2 text-xs text-zinc-600 font-medium">Rate</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.length === 0 ? (
-            <tr><td colSpan={5} className="py-8 text-center text-zinc-400">No API calls logged yet in this time range.</td></tr>
-          ) : paginated.map((item) => (
-            <tr key={item.endpoint + item.method} className="border-b border-zinc-200 hover:bg-neutral-50">
-              <td className="py-2 px-2 text-xs font-mono font-medium truncate">{item.endpoint}</td>
-              <td className="py-2 px-2"><MethodBadge method={item.method} /></td>
-              <td className="py-2 px-2 text-xs text-right">{item.total_calls.toLocaleString()}</td>
-              <td className="py-2 px-2 text-xs text-right">{item.intercepted.toLocaleString()}</td>
-              <td className="py-2 px-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${
-                        item.rate === 0 ? '' :
-                        item.rate < 33 ? 'bg-yellow-400' :
-                        item.rate < 66 ? 'bg-green-300' :
-                        'bg-green-600'
-                      }`}
-                      style={{ width: `${Math.min(item.rate, 100)}%` }}
-                    />
-                  </div>
-                  <span className="text-xs font-semibold text-zinc-700 w-10 text-right shrink-0">
-                    {item.rate % 1 === 0 ? `${item.rate}%` : `${item.rate.toFixed(1)}%`}
-                  </span>
-                </div>
-              </td>
+      <div className="overflow-x-auto">
+        <table className="w-full table-auto">
+          <thead>
+            <tr className="border-b border-zinc-200">
+              <th className="text-left py-2 px-2 text-sm text-zinc-600 font-medium whitespace-nowrap">Endpoint</th>
+              <th className="text-left py-2 px-2 text-sm text-zinc-600 font-medium whitespace-nowrap">Method</th>
+              <th className="text-right py-2 px-2 text-sm text-zinc-600 font-medium whitespace-nowrap">Total Calls</th>
+              <th className="text-right py-2 px-2 text-sm text-zinc-600 font-medium whitespace-nowrap">Intercepted</th>
+              <th className="text-left py-2 px-2 text-sm text-zinc-600 font-medium whitespace-nowrap w-40 min-w-[10rem]">Rate</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.length === 0 ? (
+              <tr><td colSpan={5} className="py-8 text-center text-zinc-400">No API calls logged yet in this time range.</td></tr>
+            ) : paginated.map((item) => (
+              <tr key={item.endpoint + item.method} className="border-b border-zinc-200 hover:bg-neutral-50">
+                <td className="py-2 px-2 text-sm font-mono font-medium max-w-[8rem] truncate">{item.endpoint}</td>
+                <td className="py-2 px-2"><MethodBadge method={item.method} /></td>
+                <td className="py-2 px-2 text-sm text-right">{item.total_calls.toLocaleString()}</td>
+                <td className="py-2 px-2 text-sm text-right">{item.intercepted.toLocaleString()}</td>
+                <td className="py-2 px-2 w-40 min-w-[10rem]">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${
+                          item.rate === 0 ? '' :
+                          item.rate < 33 ? 'bg-yellow-400' :
+                          item.rate < 66 ? 'bg-green-300' :
+                          'bg-green-600'
+                        }`}
+                        style={{ width: `${Math.min(item.rate, 100)}%` }}
+                      />
+                    </div>
+                    <span className="text-sm font-semibold text-zinc-700 w-10 text-right shrink-0">
+                      {item.rate % 1 === 0 ? `${item.rate}%` : `${item.rate.toFixed(1)}%`}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
       <Pagination total={data.length} pageSize={DASH_PAGE_SIZE} page={page} onPageChange={setPage} />
     </Card>
   )
@@ -493,21 +504,21 @@ function InterceptionMode({ interceptions }: { interceptions: InterceptionAnalyt
         <table className="w-full table-fixed">
           <thead>
             <tr className="border-b border-zinc-200">
-              <th className="text-left py-3 px-3 text-xs text-zinc-600 font-medium w-2/5">Endpoint</th>
-              <th className="text-left py-3 px-3 text-xs text-zinc-600 font-medium">Rule</th>
-              <th className="text-right py-3 px-3 text-xs text-zinc-600 font-medium w-16">Hits</th>
-              <th className="text-right py-3 px-3 text-xs text-zinc-600 font-medium w-24">Last Seen</th>
+              <th className="text-left py-3 px-3 text-sm text-zinc-600 font-medium w-2/5">Endpoint</th>
+              <th className="text-left py-3 px-3 text-sm text-zinc-600 font-medium">Rule</th>
+              <th className="text-right py-3 px-3 text-sm text-zinc-600 font-medium w-16">Hits</th>
+              <th className="text-right py-3 px-3 text-sm text-zinc-600 font-medium w-24">Last Seen</th>
             </tr>
           </thead>
           <tbody>
             {grouped.length === 0 ? (
               <tr><td colSpan={4} className="py-8 text-center text-zinc-400">No recent interceptions in this time range.</td></tr>
-            ) : paginatedRecent.map((item) => (
-              <tr key={item.endpoint + item.rule_name} className="border-b border-zinc-200 hover:bg-neutral-50">
-                <td className="py-3 px-3 text-xs font-mono font-medium truncate">{item.endpoint}</td>
-                <td className="py-3 px-3 text-xs truncate">{item.rule_name}</td>
-                <td className="py-3 px-3 text-xs text-right font-semibold">{item.hits}</td>
-                <td className="py-3 px-3 text-xs text-right text-zinc-500">{formatTime(item.last_seen)}</td>
+            ) : paginatedRecent.map((item, i) => (
+              <tr key={item.endpoint + item.rule_name} className={`hover:bg-neutral-50 ${i < paginatedRecent.length - 1 ? 'border-b border-zinc-200' : ''}`}>
+                <td className="py-3 px-3 text-sm font-mono font-medium truncate">{item.endpoint}</td>
+                <td className="py-3 px-3 text-sm truncate">{item.rule_name}</td>
+                <td className="py-3 px-3 text-sm text-right font-semibold">{item.hits}</td>
+                <td className="py-3 px-3 text-sm text-right text-zinc-500">{formatTime(item.last_seen)}</td>
               </tr>
             ))}
           </tbody>

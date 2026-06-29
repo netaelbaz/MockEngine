@@ -159,6 +159,7 @@ object MockEngine : DefaultLifecycleObserver {
                 deviceId = deviceId,
                 ruleId = rule.id,
                 endpoint = request.url.encodedPath,
+                method = request.method,
                 requestData = mapOf(
                     "method" to request.method,
                     "url" to request.url.toString()

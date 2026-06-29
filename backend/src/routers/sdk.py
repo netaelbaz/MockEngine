@@ -40,6 +40,7 @@ def get_sdk_config(
             status_code=db_rule.status_code,
             delay_s=db_rule.delay_s,
             mock_data=mock_data,
+            use_mock_backend=db_rule.use_mock_backend,
             is_enabled=db_rule.is_enabled
         ))
 
@@ -123,6 +124,7 @@ def log_intercept(
         device_id=device.id,
         rule_id=log_data.ruleId,
         endpoint=log_data.endpoint,
+        method=log_data.method,
         request_data=log_data.requestData,
         response_mock_data=log_data.responseMockData
     )

@@ -1,3 +1,10 @@
+// ==================== Auth Types ====================
+
+export interface AuthToken {
+  access_token: string
+  token_type: string
+}
+
 // ==================== API Key Types ====================
 
 export interface ApiKey {
@@ -19,9 +26,10 @@ export interface Rule {
   name: string
   url_pattern: string
   method: string
-  status_code: number
+  status_code?: number | null
   delay_s: number
   mock_data: Record<string, unknown>
+  use_mock_backend: boolean
   ai_prompt?: string
   is_enabled: boolean
   created_at: string
@@ -33,9 +41,10 @@ export interface RuleCreate {
   name: string
   url_pattern: string
   method: string
-  status_code: number
+  status_code?: number | null
   delay_s: number
   mock_data: Record<string, unknown>
+  use_mock_backend: boolean
   ai_prompt?: string
 }
 
@@ -43,9 +52,10 @@ export interface RuleUpdate {
   name?: string
   url_pattern?: string
   method?: string
-  status_code?: number
+  status_code?: number | null
   delay_s?: number
   mock_data?: Record<string, unknown>
+  use_mock_backend?: boolean
   is_enabled?: boolean
   ai_prompt?: string
 }
@@ -133,6 +143,19 @@ export interface LatencyByHourItem {
   avg_ms: number
 }
 
+export interface TrafficOverTimeItem {
+  bucket: string
+  total: number
+  intercepted: number
+}
+
+export interface DeviceHealth {
+  connected: number
+  last_heartbeat: string | null
+  offline_today: number
+  avg_session_minutes: number | null
+}
+
 export interface AnalyticsOverview {
   time_range: TimeRange
   devices: DeviceStats
@@ -142,6 +165,8 @@ export interface AnalyticsOverview {
   app_versions: AppVersionStat[]
   error_distribution: ErrorDistributionItem[]
   latency_by_hour: LatencyByHourItem[]
+  traffic_over_time: TrafficOverTimeItem[]
+  device_health: DeviceHealth
 }
 
 export interface MostInterceptedEndpoint {
@@ -165,12 +190,30 @@ export interface RuleUsage {
   usage_count: number
 }
 
+export interface RuleEffectiveness {
+  rule_id: number
+  rule_name: string
+  endpoint: string
+  hits: number
+  last_used: string | null
+}
+
+export interface EndpointInterceptionRate {
+  endpoint: string
+  method: string
+  total_calls: number
+  intercepted: number
+  rate: number
+}
+
 export interface InterceptionAnalytics {
   time_range: TimeRange
   total_interceptions: number
   most_intercepted_endpoints: MostInterceptedEndpoint[]
   recent_interceptions: RecentInterceptionDetail[]
   rule_usage: RuleUsage[]
+  rule_effectiveness: RuleEffectiveness[]
+  endpoint_interception_rate: EndpointInterceptionRate[]
 }
 
 export interface DeviceAnalytics {
