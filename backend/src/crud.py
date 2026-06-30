@@ -6,18 +6,22 @@ from typing import Optional, List, Dict, Any
 import json
 from datetime import datetime, timedelta
 
-from passlib.context import CryptContext
+import bcrypt as _bcrypt_lib
 
 from src import models, schemas
 from src.utils.encryption import encrypt, decrypt
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+def _hash_password(password: str) -> str:
+    return _bcrypt_lib.hashpw(password.encode(), _bcrypt_lib.gensalt()).decode()
+
+def _verify_password(password: str, hashed: str) -> bool:
+    return _bcrypt_lib.checkpw(password.encode(), hashed.encode())
 
 
 # ==================== User Operations ====================
 
 def create_user(db: Session, email: str, password: str, first_name: str = "", last_name: str = "") -> models.User:
-    hashed = _pwd_context.hash(password)
+    hashed = _hash_password(password)
     user = models.User(email=email.lower().strip(), hashed_password=hashed, first_name=first_name.strip(), last_name=last_name.strip())
     db.add(user)
     db.commit()
@@ -31,7 +35,7 @@ def get_user_by_email(db: Session, email: str) -> Optional[models.User]:
 
 def authenticate_user(db: Session, email: str, password: str) -> Optional[models.User]:
     user = get_user_by_email(db, email)
-    if not user or not _pwd_context.verify(password, user.hashed_password):
+    if not user or not _verify_password(password, user.hashed_password):
         return None
     return user
 

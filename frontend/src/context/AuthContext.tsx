@@ -30,9 +30,15 @@ async function authFetch(path: string, body: object): Promise<TokenResponse> {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   })
-  const data = await res.json()
-  if (!res.ok) throw new Error(data.detail || 'Request failed')
-  return data as TokenResponse
+  if (!res.ok) {
+    const isJson = res.headers.get('content-type')?.includes('application/json')
+    if (isJson) {
+      const data = await res.json()
+      throw new Error(data.detail || 'Request failed')
+    }
+    throw new Error(`Request failed (${res.status})`)
+  }
+  return res.json() as Promise<TokenResponse>
 }
 
 function loadUser(): AuthUser | null {

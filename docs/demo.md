@@ -4,13 +4,9 @@ A visual walkthrough of the MockEngine portal and what you see after integrating
 
 ## Video Walkthrough
 
-<div class="demo-video-placeholder">
-  <div class="demo-video-inner">
-    <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>
-    <p>Video walkthrough coming soon</p>
-    <span>End-to-end demo — creating rules, triggering intercepted requests from an Android device, and reading the analytics.</span>
-  </div>
-</div>
+<video controls width="100%" style="border-radius: 8px;">
+  <source src="/demo.mp4" type="video/mp4" />
+</video>
 
 ---
 

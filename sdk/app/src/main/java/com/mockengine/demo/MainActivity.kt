@@ -2,6 +2,7 @@ package com.mockengine.demo
 
 import android.os.Bundle
 import android.util.Log
+import android.view.View
 import android.widget.Button
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -19,9 +20,6 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.logging.HttpLoggingInterceptor
 import java.io.IOException
 
-/**
- * Demo Activity showing MockEngine SDK integration
- */
 class MainActivity : AppCompatActivity() {
 
     private companion object {
@@ -30,124 +28,112 @@ class MainActivity : AppCompatActivity() {
         private const val DEMO_BASE_URL = "http://10.0.2.2:8000/demo"
     }
 
-    private lateinit var tvLog: TextView
-    private val logMessages = mutableListOf<String>()
+    private lateinit var btnRun1: Button
+    private lateinit var btnRun2: Button
+    private lateinit var btnRun3: Button
+    private lateinit var tvLog1: TextView
+    private lateinit var tvLog2: TextView
+    private lateinit var tvLog3: TextView
+    private lateinit var logSection1: View
+    private lateinit var logSection2: View
+    private lateinit var logSection3: View
+
+    private lateinit var okHttpClient: OkHttpClient
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // Initialize UI components
-        tvLog = findViewById<TextView>(R.id.tvLog)
-        val btnTest = findViewById<Button>(R.id.btnTest)
+        btnRun1 = findViewById(R.id.btnRun1)
+        btnRun2 = findViewById(R.id.btnRun2)
+        btnRun3 = findViewById(R.id.btnRun3)
+        tvLog1 = findViewById(R.id.tvLog1)
+        tvLog2 = findViewById(R.id.tvLog2)
+        tvLog3 = findViewById(R.id.tvLog3)
+        logSection1 = findViewById(R.id.logSection1)
+        logSection2 = findViewById(R.id.logSection2)
+        logSection3 = findViewById(R.id.logSection3)
 
-        // Add initial log message
-        addLog("MockEngine SDK Demo")
-        addLog("-------------------")
-        addLog("Initializing SDK...")
-
-        // Initialize MockEngine SDK
         val mockEngineInterceptor = MockEngine.init(this, API_KEY)
 
-        // Setup OkHttp with logging and MockEngine interceptor
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BODY
-        }
-
-        val okHttpClient = OkHttpClient.Builder()
-            .addInterceptor(loggingInterceptor)
+        okHttpClient = OkHttpClient.Builder()
+            .addInterceptor(HttpLoggingInterceptor().apply {
+                level = HttpLoggingInterceptor.Level.BODY
+            })
             .addInterceptor(mockEngineInterceptor)
             .build()
 
-        addLog("SDK initialized successfully!")
-        addLog("Ready to test API calls")
-
-        // Set up test button
-        btnTest.setOnClickListener {
-            addLog("Starting test API calls...")
-            testApiCalls(okHttpClient)
-        }
+        btnRun1.setOnClickListener { runCard(btnRun1, logSection1, tvLog1) { tv -> testGetUsers(tv) } }
+        btnRun2.setOnClickListener { runCard(btnRun2, logSection2, tvLog2) { tv -> testGetUser(tv, "123") } }
+        btnRun3.setOnClickListener { runCard(btnRun3, logSection3, tvLog3) { tv -> testCreateUser(tv) } }
     }
 
-    /**
-     * Test various API calls to demonstrate SDK functionality
-     */
-    private fun testApiCalls(client: OkHttpClient) {
+    private fun runCard(
+        btn: Button,
+        logSection: View,
+        tv: TextView,
+        block: suspend (TextView) -> Unit
+    ) {
+        logSection.visibility = View.VISIBLE
+        tv.text = "Running..."
+        btn.isEnabled = false
         lifecycleScope.launch(Dispatchers.IO) {
-            testGetUsers(client)
-            testGetUser(client, "123")
-            testCreateUser(client)
-            withContext(Dispatchers.Main) { addLog("All test calls completed!") }
+            block(tv)
+            withContext(Dispatchers.Main) { btn.isEnabled = true }
         }
     }
 
-    private suspend fun testGetUsers(client: OkHttpClient) {
-        withContext(Dispatchers.Main) { addLog("Test 1: GET /demo/users") }
-        try {
-            val request = Request.Builder()
-                .url("$DEMO_BASE_URL/users")
-                .get()
-                .build()
-            val response = client.newCall(request).execute()
-            val body = response.body?.string()
-            withContext(Dispatchers.Main) {
-                addLog("Response: ${response.code} - ${response.message}")
-                addLog("Body: ${body?.take(100)}...")
-            }
-        } catch (e: IOException) {
-            withContext(Dispatchers.Main) { addLog("Error: ${e.message}") }
-        }
-    }
-
-    private suspend fun testGetUser(client: OkHttpClient, userId: String) {
-        withContext(Dispatchers.Main) { addLog("Test 2: GET /demo/users/$userId") }
-        try {
-            val request = Request.Builder()
-                .url("$DEMO_BASE_URL/users/$userId")
-                .get()
-                .build()
-            val response = client.newCall(request).execute()
-            val body = response.body?.string()
-            withContext(Dispatchers.Main) {
-                addLog("Response: ${response.code} - ${response.message}")
-                addLog("Body: ${body?.take(100)}...")
-            }
-        } catch (e: IOException) {
-            withContext(Dispatchers.Main) { addLog("Error: ${e.message}") }
-        }
-    }
-
-    private suspend fun testCreateUser(client: OkHttpClient) {
-        withContext(Dispatchers.Main) { addLog("Test 3: POST /demo/users") }
-        try {
-            val json = Gson().toJson(mapOf(
-                "name" to "Test User",
-                "email" to "test@example.com"
-            ))
-            val requestBody = json.toRequestBody("application/json".toMediaType())
-            val request = Request.Builder()
-                .url("$DEMO_BASE_URL/users")
-                .post(requestBody)
-                .build()
-            val response = client.newCall(request).execute()
-            val body = response.body?.string()
-            withContext(Dispatchers.Main) {
-                addLog("Response: ${response.code} - ${response.message}")
-                addLog("Body: ${body?.take(100)}...")
-            }
-        } catch (e: IOException) {
-            withContext(Dispatchers.Main) { addLog("Error: ${e.message}") }
-        }
-    }
-
-    private fun addLog(message: String) {
-        logMessages.add("${System.currentTimeMillis()}: $message")
-        updateLogDisplay()
+    private fun addLog(tv: TextView, message: String) {
+        val current = tv.text.toString()
+        val next = if (current == "Running...") message else "$current\n$message"
+        tv.text = next
         Log.d(TAG, message)
     }
 
-    private fun updateLogDisplay() {
-        val displayText = logMessages.joinToString("\n")
-        tvLog.text = displayText
+    private suspend fun testGetUsers(tv: TextView) {
+        withContext(Dispatchers.Main) { addLog(tv, "GET /demo/users") }
+        try {
+            val request = Request.Builder().url("$DEMO_BASE_URL/users").get().build()
+            val response = okHttpClient.newCall(request).execute()
+            val body = response.body?.string()
+            withContext(Dispatchers.Main) {
+                addLog(tv, "Response: ${response.code} - ${response.message}")
+                addLog(tv, "Body: ${body?.take(200)}...")
+            }
+        } catch (e: IOException) {
+            withContext(Dispatchers.Main) { addLog(tv, "Error: ${e.message}") }
+        }
+    }
+
+    private suspend fun testGetUser(tv: TextView, userId: String) {
+        withContext(Dispatchers.Main) { addLog(tv, "GET /demo/users/$userId") }
+        try {
+            val request = Request.Builder().url("$DEMO_BASE_URL/users/$userId").get().build()
+            val response = okHttpClient.newCall(request).execute()
+            val body = response.body?.string()
+            withContext(Dispatchers.Main) {
+                addLog(tv, "Response: ${response.code} - ${response.message}")
+                addLog(tv, "Body: ${body?.take(200)}...")
+            }
+        } catch (e: IOException) {
+            withContext(Dispatchers.Main) { addLog(tv, "Error: ${e.message}") }
+        }
+    }
+
+    private suspend fun testCreateUser(tv: TextView) {
+        withContext(Dispatchers.Main) { addLog(tv, "POST /demo/users") }
+        try {
+            val json = Gson().toJson(mapOf("name" to "Test User", "email" to "test@example.com"))
+            val requestBody = json.toRequestBody("application/json".toMediaType())
+            val request = Request.Builder().url("$DEMO_BASE_URL/users").post(requestBody).build()
+            val response = okHttpClient.newCall(request).execute()
+            val body = response.body?.string()
+            withContext(Dispatchers.Main) {
+                addLog(tv, "Response: ${response.code} - ${response.message}")
+                addLog(tv, "Body: ${body?.take(200)}...")
+            }
+        } catch (e: IOException) {
+            withContext(Dispatchers.Main) { addLog(tv, "Error: ${e.message}") }
+        }
     }
 }

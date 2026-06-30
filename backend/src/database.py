@@ -42,6 +42,17 @@ def run_migrations(engine):
             conn.execute(text("ALTER TABLE interception_logs ADD COLUMN method VARCHAR"))
             conn.commit()
 
+        # Normalize mixed timestamp formats (T-separator vs space) to space format
+        # so SQLite string comparisons work correctly across all records.
+        for table, col in [("call_logs", "timestamp"), ("interception_logs", "timestamp"),
+                           ("devices", "first_seen"), ("devices", "last_seen")]:
+            conn.execute(text(f"""
+                UPDATE {table}
+                SET {col} = datetime({col})
+                WHERE {col} LIKE '%T%'
+            """))
+        conn.commit()
+
         # Make rules.status_code nullable (SQLite requires full table recreation)
         result = conn.execute(text("PRAGMA table_info(rules)"))
         rules_notnull = {row[1]: row[3] for row in result}  # col_name -> notnull flag
